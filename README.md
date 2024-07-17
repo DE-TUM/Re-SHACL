@@ -1,10 +1,10 @@
-# Re-SHACL
+# Re-SHACL (TODO)
 
 ## Install Libraries:
 Use `pip` to install the libraries listed in the `requirements.txt` file.
 * `pip install -r requirements.txt`
 
-## DataSet:
+## DataSet (TODO):
 Please download datasets:
   * EnDe-Lite50(without_Ontology).ttl : [Download](https://drive.google.com/file/d/14RXnJZL9e6ZdbFtfPH69t1lI5Idbnkze/view?usp=drive_link)
   * EnDe-Lite100(without_Ontology).ttl : [Download](https://drive.google.com/file/d/1xWMp2mSEk0i7X_nHp3JjZRnvt3bPiz96/view?usp=drive_link)
