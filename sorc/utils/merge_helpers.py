@@ -1,25 +1,6 @@
 
-
-from ..errors import FusionRuntimeError
-from pyshacl.pytypes import GraphLike
-import rdflib
-
 from rdflib.namespace import OWL, RDF, RDFS, SH
-from rdflib import Graph
-from pyshacl.shapes_graph import ShapesGraph
 
-from typing import TYPE_CHECKING, Dict, Iterator, List, Optional, Set, Tuple, Union
-
-from pyshacl.monkey import rdflib_bool_patch, rdflib_bool_unpatch
-from pyshacl.rdfutil import (
-    load_from_source,
-)
-from pyshacl.consts import (
-    SH_path,
-    SH_node,
-    RDFS_subClassOf,
-    SH_targetNode,
-)
 SH_class = SH["class"]
 
 from rdflib.namespace import Namespace
@@ -28,8 +9,6 @@ RDFS = Namespace(RDFS_PFX)
 RDFS_subPropertyOf = RDFS.subPropertyOf
 
 
-if TYPE_CHECKING:
-    from pyshacl.shapes_graph import ShapesGraph
 
 
 def all_samePath_merged(g, path_value):
