@@ -1,12 +1,11 @@
+# constants.py
 from rdflib.namespace import RDF, RDFS, OWL, SH
-from rdflib import Namespace
 
-SH_class = SH["class"]
-RDFS_PFX = 'http://www.w3.org/2000/01/rdf-schema#'
-RDFS_NS = Namespace(RDFS_PFX)
-RDFS_subPropertyOf = RDFS_NS.subPropertyOf
-RDFS_subClassOf = RDFS_NS.subClassOf
-
-__all__ = [
-    "RDF", "RDFS", "OWL", "SH", "SH_class", "RDFS_subPropertyOf", "RDFS_subClassOf"
-]
+RDFS_SUBPROPERTYOF = RDFS.subPropertyOf
+RDFS_SUBCLASSOF = RDFS.subClassOf
+OWL_EQUIVALENTCLASS = OWL.equivalentClass
+OWL_SAMEAS = OWL.sameAs
+SH_PATH = SH.path
+SH_NODE = SH.node
+SH_TARGETNODE = SH.targetNode
+SH_CLASS = SH["class"]

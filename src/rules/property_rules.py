@@ -12,19 +12,12 @@ def apply_property_inference(g, shapes):
                 properties.add(path)
 
     for prop in properties:
-        _apply_subproperty_closure(g, prop)
         _apply_equivalent_property_expansion(g, prop)
         _apply_symmetric_property(g, prop)
         _apply_transitive_property(g, prop)
         _apply_inverse_property(g, prop)
         _apply_functional_property(g, prop)
         _apply_inverse_functional_property(g, prop)
-
-
-def _apply_subproperty_closure(g, prop):
-    for sub_p in g.subjects(RDFS.subPropertyOf, prop):
-        for s, o in g.subject_objects(sub_p):
-            g.add((s, prop, o))
 
 
 def _apply_equivalent_property_expansion(g, prop):

@@ -3,6 +3,15 @@ from rdflib.namespace import RDF, OWL
 from ..errors import FusionRuntimeError
 
 
+def apply_owl_axioms(g, properties):
+    _apply_equivalent_property_expansion(g, properties)
+    _apply_symmetric_property(g, properties)
+    _apply_transitive_property(g, properties)
+    _apply_inverse_property(g, properties)
+    _apply_functional_property(g, properties)
+    _apply_inverse_functional_property(g, properties)
+
+
 def check_transitive_property(g: Graph, p):
     if (p, RDF.type, OWL.TransitiveProperty) in g:
         for s, o in g.subject_objects(p):

@@ -68,62 +68,6 @@ def load_graph(data_graph: Union[GraphLike, str, bytes],
         
     return shapes, named_graphs, shape_graph
 
-
-# def check_symmetricProperty(g, p): # RULE prp-symp
-#     if (p, RDF.type, OWL.SymmetricProperty) in g:
-#         for x, y in g.subject_objects(p):
-#             g.add((y, p, x))
-#         #g.remove((p, RDF.type, OWL.SymmetricProperty))
-    
-
-# def check_asymmetricProperty(g, p): # prp-asyp
-#     if (p, RDF.type, OWL.AsymmetricProperty) in g:
-#         for x, y in g.subject_objects(p):
-#             if (y, p, x) in g:
-#                 raise FusionRuntimeError(
-#                     "Erroneous usage of asymmetric property %s on %s and %s"
-#                     % (p, x, y)
-#                 )
-   
-# def check_transitiveProperty(g, p):    
-#     if (p, RDF.type, OWL.TransitiveProperty) in g: 
-#         for s, o in g.subject_objects(p):
-#             trans = g.transitive_objects(o, p)
-#             for oo in trans:          
-#                 g.add((s, p, oo))  
-                
-# def check_propertyDisjointWith(g, focus_property): # prp-pdw
-#     for p in g.objects(focus_property, OWL.propertyDisjointWith):
-#         for x, y in g.subject_objects(focus_property):
-#             if (x, p, y) in g:
-#                 raise FusionRuntimeError(
-#                     "Erroneous usage of disjoint properties %s and %s on %s and %s"
-#                     % (focus_property, p, x, y)
-#                 )
-
-#     for p in g.subjects(OWL.propertyDisjointWith, focus_property):
-#         for x, y in g.subject_objects(p):
-#             if (x, focus_property, y) in g:
-#                 raise FusionRuntimeError(
-#                     "Erroneous usage of disjoint properties %s and %s on %s and %s"
-#                     % (p, focus_property, x, y)
-#                 )
-    
-    
-    
-# def check_inverseOf(g, focus_property): 
-#     for p1 in g.subjects(OWL.inverseOf, focus_property): 
-#         for x, y in g.subject_objects(p1):
-#             g.add((y, focus_property, x))
-#         for xx, yy in g.subject_objects(focus_property):
-#             g.add((yy, p1, xx))
-#     for p2 in g.objects(focus_property, OWL.inverseOf): 
-#         for x, y in g.subject_objects(p2):
-#             g.add((y, focus_property, x))
-#         for xx, yy in g.subject_objects(focus_property):
-#             g.add((yy, p2, xx))
-        
-    
 def check_domain_range(g, p, target_nodes, same_nodes, target_classes):
     for o in g.objects(p, RDFS.domain): # RULE prp-dom , rdfs2 
         for x, y in g.subject_objects(p):
@@ -144,224 +88,6 @@ def check_domain_range(g, p, target_nodes, same_nodes, target_classes):
                     
     return target_nodes
 
-
-# def target_range(g, target_nodes, same_nodes, target_classes):
-#     for c in target_classes:
-#         #range
-#         for pp in g.subjects( RDFS.range, c):
-            
-#             ep_lis = { s for s in g.transitive_subjects(OWL.equivalentProperty, pp)}
-                        
-#             ep2 = {s for s in g.transitive_objects(pp, OWL.equivalentProperty)}
-            
-#             ep_lis = ep_lis.union(ep2)
-#             for ep in ep_lis:
-              
-#                 g.add((ep, RDFS_subPropertyOf, pp))
-            
-            
-#             sp = g.transitive_subjects(RDFS_subPropertyOf, pp)
-#             for subp in sp:
-#                 ep1 = { s for s in g.transitive_subjects(OWL.equivalentProperty, subp)}
-               
-                            
-#                 ep3 = { s for s in g.transitive_objects(subp, OWL.equivalentProperty)}
-                
-#                 ep1 = ep1.union(ep3)
-#                 for ep in ep1:
-                   
-#                     for ss, oo in g.subject_objects(ep):
-#                         g.add((oo, RDF.type, c))
-#                         if not oo in target_nodes:
-#                             target_nodes.add(oo)
-#                             same_set = set()
-#                             same_nodes.update({oo: same_set})
-                
-    
-#                 for ss, oo in g.subject_objects(subp):
-#                     g.add((oo, RDF.type, c))
-#                     if not oo in target_nodes:
-#                         target_nodes.add(oo)
-#                         same_set = set()
-#                         same_nodes.update({oo: same_set})
-            
-#             for s1, oo in g.subject_objects(pp):
-#                 g.add((oo, RDF.type, c))
-#                 if not oo in target_nodes:
-#                     target_nodes.add(oo)
-#                     same_set = set()
-#                     same_nodes.update({oo: same_set})        
-    
-# def target_domain_range(g, target_nodes, same_nodes, target_classes):
-#     for c in target_classes:
-#         #range
-#         for pp in g.subjects( RDFS.range, c):
-            
-#             ep_lis = { s for s in g.transitive_subjects(OWL.equivalentProperty, pp)}
-                        
-#             ep2 = {s for s in g.transitive_objects(pp, OWL.equivalentProperty)}
-            
-#             ep_lis = ep_lis.union(ep2)
-#             for ep in ep_lis:
-              
-#                 for ss, oo in g.subject_objects(ep):
-#                     g.add((oo, RDF.type, c))
-#                     if not oo in target_nodes:
-#                         target_nodes.add(oo)
-#                         same_set = set()
-#                         same_nodes.update({oo: same_set})
-            
-            
-#             sp = g.transitive_subjects(RDFS_subPropertyOf, pp)
-#             for subp in sp:
-#                 ep1 = { s for s in g.transitive_subjects(OWL.equivalentProperty, subp)}
-               
-                            
-#                 ep3 = { s for s in g.transitive_objects(subp, OWL.equivalentProperty)}
-                
-#                 ep1 = ep1.union(ep3)
-#                 for ep in ep1:
-                    
-#                     for ss, oo in g.subject_objects(ep):
-#                         g.add((oo, RDF.type, c))
-#                         if not oo in target_nodes:
-#                             target_nodes.add(oo)
-#                             same_set = set()
-#                             same_nodes.update({oo: same_set})
-                
-            
-#                 for ss, oo in g.subject_objects(subp):
-#                     g.add((oo, RDF.type, c))
-#                     if not oo in target_nodes:
-#                         target_nodes.add(oo)
-#                         same_set = set()
-#                         same_nodes.update({oo: same_set})
-            
-#             for s1, oo in g.subject_objects(pp):
-#                 g.add((oo, RDF.type, c))
-#                 if not oo in target_nodes:
-#                     target_nodes.add(oo)
-#                     same_set = set()
-#                     same_nodes.update({oo: same_set})
-            
-             
-#         #domain
-#         for p in g.subjects(RDFS.domain, c):
-            
-#             ep1 = {s for s in g.transitive_subjects(OWL.equivalentProperty, p)}
-                        
-#             ep2 = { s for s in g.transitive_objects(p, OWL.equivalentProperty)}
-#             ep2=ep2.union(ep1)
-#             for ep in ep2:
-#                 g.add((ep, RDFS_subPropertyOf, p))
-            
-#             sp = g.transitive_subjects(RDFS_subPropertyOf, p)
-#             for subp in sp:
-#                 ep3 = { s for s in g.transitive_subjects(OWL.equivalentProperty, subp)}
-                            
-#                 ep4 = { s for s in g.transitive_objects(subp, OWL.equivalentProperty)}
-#                 ep3=ep3.union(ep4)
-#                 for ep in ep3:
-                  
-#                     for ss, o in g.subject_objects(ep):
-#                         g.add((ss, RDF.type, c))
-#                         if not ss in target_nodes:
-#                             target_nodes.add(ss)
-#                             same_set = set()
-#                             same_nodes.update({ss: same_set})
-               
-#                 for ss, o in g.subject_objects(subp):
-#                     g.add((ss, RDF.type, c))
-#                     if not ss in target_nodes:
-#                         target_nodes.add(ss)
-#                         same_set = set()
-#                         same_nodes.update({ss: same_set})
-            
-#             for s, o in g.subject_objects(p):
-#                 if not (s, RDF.type, c) in g:
-#                     g.add((s, RDF.type, c))
-#                 if not s in target_nodes:
-#                     target_nodes.add(s)
-#                     same_set = set()
-#                     same_nodes.update({s: same_set})
-        
-
-# def check_com_dw(g, class_list):
-#     for target_class in class_list:
-#         # RULE cls-com
-#         for c2 in g.objects(target_class, OWL.complementOf):
-#             for x in g.subjects(RDF.type, target_class):
-#                 if (x, RDF.type, c2) in g:
-#                     raise FusionRuntimeError(
-#                         "Violation of complementarity for classes %s and %s on element %s (or an identical individual with it)"
-#                         % (target_class, c2, x)
-#                     )
-                    
-#         for c1 in g.subjects(OWL.complementOf, target_class):
-#             for x in g.subjects(RDF.type, c1):
-#                 if (x, RDF.type, target_class) in g:
-#                     raise FusionRuntimeError(
-#                         "Violation of complementarity for classes %s and %s on element %s (or an identical individual with it)"
-#                         % (c1, target_class, x)
-#                     )
-    
-#         # RULE cax-dw 
-#         for c2 in g.objects(target_class, OWL.disjointWith):
-#             for x in g.subjects(RDF.type, target_class):
-#                 if (x, RDF.type, c2) in g:
-#                     raise FusionRuntimeError(
-#                         "Disjoint classes %s and %s have a common individual %s (or an identical individual with it)"
-#                         % (target_class, c2, x)
-#                     )
-                    
-#         for c1 in g.subjects(OWL.disjointWith, target_class):
-#             for x in g.subjects(RDF.type, c1):
-#                 if (x, RDF.type, target_class) in g:
-#                     raise FusionRuntimeError(
-#                         "Disjoint classes %s and %s have a common individual %s (or an identical individual with it)"
-#                         % (c1, target_class, x)
-#                    )  
-    
-
-# def check_eq_diff_erro(g, s, o):
-#     if (s, OWL.differentFrom, o) in g or (
-#         o,
-#         OWL.differentFrom,
-#         s,
-#     ) in g:
-#         raise FusionRuntimeError(
-#                 "'sameAs' and 'differentFrom' cannot be used on the same subject-object pair: (%s, %s)"
-#                     % (s, o)
-#             )
-             
-# def check_irreflexiveProperty(g,p): # RULE prp-irp
-#     if (p, RDF.type, OWL.IrreflexiveProperty) in g:
-#         for x, y in g.subject_objects(p):
-#             if x == y:
-#                 raise FusionRuntimeError(
-#                         "Irreflexive property used on %s with %s" % (x, p)
-#                     ) 
-
-
-# def check_FunctionalProperty(g, focus_property):
-#     # prp-fp
-#     if (focus_property, RDF.type, OWL.FunctionalProperty) in g: 
-#         for x, y1 in g.subject_objects(focus_property):
-#             for y2 in g.objects(x, focus_property):
-#                 if y1 != y2:
-#                     #if y1 in found_node_targets or y2 in found_node_targets
-#                     g.add((y1, OWL.sameAs, y2))
-      
-    
-# def check_InverseFunctionalProperty(g, focus_property):
-#     # prp-ifp
-#     if (focus_property, RDF.type, OWL.InverseFunctionalProperty) in g:
-#         for x1, y in g.subject_objects(focus_property):
-#             for x2 in g.subjects(focus_property, y):
-#                 if x1 != x2:
-#                     #if x1 in found_node_targets or x2 in found_node_targets
-#                     g.add((x1, OWL.sameAs, x2))
- 
 
 def all_samePath_merged(g, path_value):
     for p in path_value:
@@ -419,27 +145,7 @@ def merge_target_classes(g, found_node_targets, same_nodes, target_classes):
     eq_targetNodes = set()
     for c in target_classes:
         while not sameClasses_merged(g, c):
-            #print("Merge Classes")
-            # for c1 in g.subjects(OWL.equivalentClass, c): # c1 == c
-            #     eq_targetClass.add(c1)
-            #     for s in g.subjects(RDF.type, c1):
-            #         eq_targetNodes.add(s)
-            #         g.add((s, RDF.type, c))
-            #     for ss in g.subjects(RDF.type, c):
-            #         g.add((ss, RDF.type, c1))
-            #     g.remove((c1, OWL.equivalentClass, c))
-            #     g.add((c1, RDFS.subClassOf, c))
-            #     g.add((c, RDFS.subClassOf, c1))
-            # for c2 in g.objects(c, OWL.equivalentClass): # c == c2
-            #     eq_targetClass.add(c2)
-            #     for s in g.subjects(RDF.type, c2):
-            #         eq_targetNodes.add(s)
-            #         g.add((s, RDF.type, c))
-            #     for ss in g.subjects(RDF.type, c):
-            #         g.add((ss, RDF.type, c2))
-            #     g.remove((c, OWL.equivalentClass, c2))
-            #     g.add((c2, RDFS.subClassOf, c))
-            #     g.add((c, RDFS.subClassOf, c2))
+
             for c1 in g.subjects(OWL.sameAs, c): # c1 == c 
                 eq_targetClass.add(c1)
                 for s in g.subjects(RDF.type, c1):
@@ -482,13 +188,7 @@ def merge_same_property(g, properties, found_node_targets, same_nodes, target_cl
                 for p3 in g.subjects(RDFS.subPropertyOf, sub_p): # RULE scm-spo , rdfs5
                     if focus_property != p3:
                         g.add((p3, RDFS.subPropertyOf, focus_property))
-                        
-                # for c in g.objects(focus_property,RDFS.domain): #scm-dom2
-                #     g.add((sub_p, RDFS.domain, c))
-                    
-                # for c1 in g.objects(focus_property,RDFS.range): #scm-rng2
-                #     g.add((sub_p, RDFS.range, c1))
-                    
+
                 for x, y in g.subject_objects(sub_p): # prp-spo1 , rdfs7
                     g.add((x, focus_property, y))
                 
@@ -499,12 +199,7 @@ def merge_same_property(g, properties, found_node_targets, same_nodes, target_cl
             #print(focus_property)
             g.remove((focus_property, OWL.sameAs, focus_property))
             
-            # for p1 in g.subjects(OWL.equivalentProperty, focus_property):
-            #     g.remove((p1, OWL.equivalentProperty, focus_property))
-            #     g.add((focus_property, OWL.sameAs, p1))
-            # for p2 in g.objects(focus_property, OWL.equivalentProperty):
-            #     g.remove((focus_property, OWL.equivalentProperty, p2))
-            #     g.add((focus_property, OWL.sameAs, p2))
+
             
             for same_prop in g.subjects(OWL.sameAs, focus_property):                 
                 g.remove((same_prop, OWL.sameAs, focus_property))
@@ -540,15 +235,9 @@ def merge_same_property(g, properties, found_node_targets, same_nodes, target_cl
                     
                 g.remove((focus_property, OWL.sameAs, same_property))
             
-                
-        #check_propertyDisjointWith(g, focus_property)
-        # check_symmetricProperty(g, focus_property)
-        # check_transitiveProperty(g, focus_property)
-        # check_inverseOf(g, focus_property)
+
         check_domain_range(g, focus_property, found_node_targets, same_nodes, target_classes)
-        #check_com_dw(g, target_classes)
-        # check_FunctionalProperty(g, focus_property)
-        # check_InverseFunctionalProperty(g, focus_property)
+
   
 
 
@@ -722,16 +411,7 @@ def merged_graph(
     for k in same_nodes:
         for se in same_nodes[k]:
             vg.add((k, OWL.sameAs, se))
-            
-    # output_shapes = Graph()    # Load the rewrited shapes graph 
-    # print("shapes: "+str(type(shapes)))
-    # print("shapes_length: "+str(len(shapes)))
-    # for s in shapes:
-    #     print("s: "+str(type(s)))
-    #     output_shapes = output_shapes + s.sg.graph
-    
-    # print("shape_g:",type(shape_g))
-        
+
     return vg, same_nodes, shape_g # output_shapes
          
 
