@@ -1,5 +1,5 @@
 from ..core.domain_range import target_domain_range, target_range
-from ..core.merge import (
+from ..core.merging import (
     merge_same_focus,
     merge_same_property,
     merge_target_classes,

@@ -1,0 +1,3 @@
+from .focus_node_merging import merge_same_focus
+from .property_merging import merge_same_property
+from .class_merging import merge_target_classes
