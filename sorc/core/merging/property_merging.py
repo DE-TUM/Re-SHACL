@@ -3,12 +3,13 @@ from pyshacl.consts import SH_path
 from sorc.utils.merge_helpers import all_subProperties_merged, all_property_merged
 from sorc.core.domain_range import check_domain_range
 from sorc.core.owl_semantics import (
-    check_symmetricProperty,
-    check_transitiveProperty,
-    check_inverseOf,
-    check_FunctionalProperty,
-    check_InverseFunctionalProperty
+    apply_symmetric_property,
+    apply_transitive_property,
+    apply_inverse_properties,
+    apply_functional_property,
+    apply_inverse_functional_property
 )
+
 
 
 def merge_same_property(g, properties, focus_nodes, same_nodes, class_targets, shapes, target_property, shacl_graph):
@@ -85,9 +86,9 @@ def rewrite_property_in_shapes(old_prop, new_prop, shapes, target_property, shac
 
 
 def apply_property_semantics(g, prop, focus_nodes, same_nodes, class_targets):
-    check_symmetricProperty(g, prop)
-    check_transitiveProperty(g, prop)
-    check_inverseOf(g, prop)
+    apply_symmetric_property(g, prop)
+    apply_transitive_property(g, prop)
+    apply_inverse_properties(g, prop)
     check_domain_range(g, prop, focus_nodes, same_nodes, class_targets)
-    check_FunctionalProperty(g, prop)
-    check_InverseFunctionalProperty(g, prop)
+    apply_functional_property(g, prop)
+    apply_inverse_functional_property(g, prop)

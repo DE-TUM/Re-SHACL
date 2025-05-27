@@ -1,7 +1,6 @@
 from .core.domain_range import *
 from .core.load import load_graph
-from .core.merge import *
-from .core.owl_semantics import *
+from .core.merging import *
 from .utils.merge_helpers import *
 
 from pyshacl.pytypes import GraphLike

@@ -11,9 +11,10 @@ def extract_targets_and_paths(shapes, vg: GraphLike):
     found_node_targets = set()
     target_classes = set()
     path_value = set()
-    shape_linked_target = set()
+    shape_path_properties = set()  # properties extracted from sh:path
     sh_class = set()
     target_nodes = set()
+    property_shape_nodes = set()  # blank nodes representing property shapes
 
     for s in shapes:
         targets = s.target_nodes()
@@ -21,25 +22,28 @@ def extract_targets_and_paths(shapes, vg: GraphLike):
 
         focus = s.focus_nodes(vg)
         found_node_targets.update(focus)
-        target_classes.update(s.target_classes())
-        target_classes.update(s.implicit_class_targets())
 
-        target_property = set(s.property_shapes())
+        target_classes_local = set(s.target_classes())
+        implicit_classes_local = set(s.implicit_class_targets())
+        target_classes.update(target_classes_local)
+        target_classes.update(implicit_classes_local)
 
-        if len(set(s.target_classes())) == 0:
-            for prop in target_property:
-                path_value.update(s.sg.graph.objects(prop, SH_path))
+        property_shapes = set(s.property_shapes())
+        property_shape_nodes.update(property_shapes)
 
-        for prop in target_property:
-            if list(s.sg.graph.objects(prop, SH_node)):
-                shape_linked_target.update(s.sg.graph.objects(prop, SH_path))
-            if list(s.sg.graph.objects(prop, SH_class)):
-                sh_class.update(s.sg.graph.objects(prop, SH_class))
+        if len(target_classes_local) == 0:
+            for ps in property_shapes:
+                path_value.update(s.sg.graph.objects(ps, SH_path))
+
+        for ps in property_shapes:
+            if list(s.sg.graph.objects(ps, SH_node)):
+                shape_path_properties.update(s.sg.graph.objects(ps, SH_path))
+            if list(s.sg.graph.objects(ps, SH_class)):
+                sh_class.update(s.sg.graph.objects(ps, SH_class))
+
+            path_value.update(s.sg.graph.objects(ps, SH_path))
 
         target_classes.update(sh_class)
-
-        for prop in target_property:
-            path_value.update(s.sg.graph.objects(prop, SH_path))
 
     # Closure over rdfs:subPropertyOf for paths
     extra_paths = set()
@@ -57,12 +61,20 @@ def extract_targets_and_paths(shapes, vg: GraphLike):
                 extra_classes.add(subclass)
     target_classes.update(extra_classes)
 
-    # Add linked focus nodes from shape_linked_target
-    for path in shape_linked_target:
+    # Add linked focus nodes from shape path properties
+    for path in shape_path_properties:
         for obj in vg.objects(None, path):
             found_node_targets.add(obj)
 
     # Init same_nodes dictionary
     same_nodes = {node: set() for node in found_node_targets}
 
-    return found_node_targets, target_classes, path_value, same_nodes, shape_linked_target, target_nodes
+    return (
+        found_node_targets,
+        target_classes,
+        path_value,
+        same_nodes,
+        shape_path_properties,
+        target_nodes,
+        property_shape_nodes
+    )
