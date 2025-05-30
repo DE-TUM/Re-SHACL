@@ -1,7 +1,8 @@
-from .target_extraction import extract_targets_and_paths
+# from .target_extraction import extract_targets_and_paths
 from .closure_engine import run_closure_loop
 from ..core.load import load_graph
 from rdflib.namespace import OWL
+from sorc.types import GraphsBundle, ShapeTargets
 
 
 def run_merging_pipeline(data_graph, shacl_graph=None, data_graph_format=None, shacl_graph_format=None):
@@ -9,35 +10,21 @@ def run_merging_pipeline(data_graph, shacl_graph=None, data_graph_format=None, s
         data_graph, shacl_graph, data_graph_format, shacl_graph_format
     )
     vg = named_graphs[0]
+    graphs = GraphsBundle(data_graph=vg, shapes_graph=shape_graph.graph)
 
-    # Step 1: extract targets, paths, property shape nodes
-    (
-        focus_targets,
-        class_targets,
-        paths,
-        same_nodes,
-        shape_path_properties,
-        target_nodes,
-        property_shape_nodes
-    ) = extract_targets_and_paths(shapes, vg)
+    # Extract all shape targets
+    targets = ShapeTargets.from_shapes(shapes, vg)
 
-    # Step 2: run merge closure loop
+    # Run closure loop with grouped inputs
     run_closure_loop(
-        vg,
-        shape_graph.graph,
+        graphs,
         shapes,
-        focus_targets,
-        class_targets,
-        paths,
-        same_nodes,
-        shape_path_properties,
-        target_nodes,
-        property_shape_nodes
+        targets
     )
 
-    # Step 3: owl:sameAs link insertions
-    for node, equivalents in same_nodes.items():
+    # Add owl:sameAs links to merged graph
+    for node, equivalents in targets.same_as_dict.items():
         for eq in equivalents:
-            vg.add((node, OWL.sameAs, eq))
+            graphs.data_graph.add((node, OWL.sameAs, eq))
 
-    return vg, same_nodes, shape_graph.graph
+    return graphs.data_graph, targets.same_as_dict, graphs.shapes_graph
