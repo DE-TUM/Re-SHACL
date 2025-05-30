@@ -1,6 +1,6 @@
 from rdflib import RDFS
 
-from ..core.domain_range import target_domain_range, target_range
+from src.core.owl_semantics.domain_range import target_domain_range, target_range
 from ..core.merging import (
     merge_same_focus,
     merge_same_property,
