@@ -1,7 +1,7 @@
 # core/owl_semantics/validate_checks.py
 
 from rdflib.namespace import RDF, OWL
-from sorc.errors import FusionRuntimeError
+from src.errors import FusionRuntimeError
 
 
 def check_asymmetric_property(g):

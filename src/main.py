@@ -1,4 +1,4 @@
-from sorc.pipeline.run_pipeline import run_merging_pipeline
+from src.pipeline.run_pipeline import run_merging_pipeline
 
 if __name__ == "__main__":
     g = "../source/Datasets/EnDe-Lite50.ttl"

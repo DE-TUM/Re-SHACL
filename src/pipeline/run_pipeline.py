@@ -2,7 +2,7 @@
 from .closure_engine import run_closure_loop
 from ..core.load import load_graph
 from rdflib.namespace import OWL
-from sorc.types import GraphsBundle, ShapeTargets
+from src.types import GraphsBundle, ShapeTargets
 
 
 def run_merging_pipeline(data_graph, shacl_graph=None, data_graph_format=None, shacl_graph_format=None):

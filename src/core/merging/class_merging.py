@@ -1,6 +1,6 @@
 from rdflib.namespace import RDF, OWL, RDFS
 
-from sorc.utils.merge_helpers import sameClasses_merged
+from src.utils.merge_helpers import sameClasses_merged
 
 
 def merge_target_classes(g, found_node_targets, same_nodes, target_classes):

@@ -1,7 +1,7 @@
 # core/owl_semantics/class_axioms.py
 
 from rdflib.namespace import RDF, OWL
-from sorc.errors import FusionRuntimeError
+from src.errors import FusionRuntimeError
 
 
 def check_disjoint_classes(g, class_list):

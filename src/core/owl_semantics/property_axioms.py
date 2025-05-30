@@ -1,7 +1,7 @@
 # core/owl_semantics/property_axioms.py
 
 from rdflib.namespace import OWL, RDF
-from sorc.errors import FusionRuntimeError
+from src.errors import FusionRuntimeError
 
 
 def apply_symmetric_property(g, prop):

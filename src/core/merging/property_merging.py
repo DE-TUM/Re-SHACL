@@ -1,8 +1,8 @@
 from rdflib.namespace import OWL, RDFS
 from pyshacl.consts import SH_path
-from sorc.utils.merge_helpers import all_subProperties_merged, all_property_merged
-from sorc.core.domain_range import check_domain_range
-from sorc.core.owl_semantics import (
+from src.utils.merge_helpers import all_subProperties_merged, all_property_merged
+from src.core.domain_range import check_domain_range
+from src.core.owl_semantics import (
     apply_symmetric_property,
     apply_transitive_property,
     apply_inverse_properties,

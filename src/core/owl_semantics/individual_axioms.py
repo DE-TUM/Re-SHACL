@@ -1,7 +1,7 @@
 # core/owl_semantics/individual_axioms.py
 
 from rdflib.namespace import OWL
-from sorc.errors import FusionRuntimeError
+from src.errors import FusionRuntimeError
 
 
 def check_same_as_conflict(g, s, o):
