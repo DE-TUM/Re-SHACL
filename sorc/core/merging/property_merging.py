@@ -11,12 +11,10 @@ from sorc.core.owl_semantics import (
 )
 
 
-
-def merge_same_property(g, properties, focus_nodes, same_nodes, class_targets, shapes, target_property, shacl_graph):
+def merge_same_property(g, properties, focus_nodes, same_nodes, class_targets, shapes, property_shape_nodes, shacl_graph):
     for focus_property in properties:
-
         merge_subproperties(g, focus_property)
-        merge_equivalent_properties(g, focus_property, properties, shapes, target_property, shacl_graph)
+        merge_equivalent_properties(g, focus_property, shapes, property_shape_nodes, shacl_graph)
         apply_property_semantics(g, focus_property, focus_nodes, same_nodes, class_targets)
 
 
@@ -40,20 +38,10 @@ def merge_subproperties(g, focus_property):
             g.remove((sub_p, RDFS.subPropertyOf, focus_property))
 
 
-def merge_equivalent_properties(g, focus_property, properties, shapes, target_property, shacl_graph):
+def merge_equivalent_properties(g, focus_property, shapes, property_shape_nodes, shacl_graph):
     while not all_property_merged(g, focus_property):
-        g.remove((focus_property, OWL.sameAs, focus_property))
-
-        for p in g.subjects(OWL.equivalentProperty, focus_property):
-            g.remove((p, OWL.equivalentProperty, focus_property))
-            g.add((focus_property, OWL.sameAs, p))
-        for p in g.objects(focus_property, OWL.equivalentProperty):
-            g.remove((focus_property, OWL.equivalentProperty, p))
-            g.add((focus_property, OWL.sameAs, p))
-
-        for p in g.subjects(OWL.sameAs, focus_property):
-            g.remove((p, OWL.sameAs, focus_property))
-            g.add((focus_property, OWL.sameAs, p))
+        _replace_equivalent_predicates(g, focus_property, OWL.equivalentProperty)
+        _replace_equivalent_predicates(g, focus_property, OWL.sameAs)
 
         for same_p in g.objects(focus_property, OWL.sameAs):
             if same_p == focus_property:
@@ -72,17 +60,24 @@ def merge_equivalent_properties(g, focus_property, properties, shapes, target_pr
                 g.remove((subj, same_p, obj))
                 g.add((subj, focus_property, obj))
 
-            rewrite_property_in_shapes(same_p, focus_property, shapes, target_property, shacl_graph)
-
+            rewrite_property_in_shapes(same_p, focus_property, shapes, property_shape_nodes, shacl_graph)
             g.remove((focus_property, OWL.sameAs, same_p))
 
 
-def rewrite_property_in_shapes(old_prop, new_prop, shapes, target_property, shacl_graph):
-    for shape in shapes:
-        for blank_node in target_property:
-            if old_prop in shacl_graph.objects(blank_node, SH_path):
-                shacl_graph.remove((blank_node, SH_path, old_prop))
-                shacl_graph.add((blank_node, SH_path, new_prop))
+def _replace_equivalent_predicates(g, focus_property, predicate):
+    for p in g.subjects(predicate, focus_property):
+        g.remove((p, predicate, focus_property))
+        g.add((focus_property, OWL.sameAs, p))
+    for p in g.objects(focus_property, predicate):
+        g.remove((focus_property, predicate, p))
+        g.add((focus_property, OWL.sameAs, p))
+
+
+def rewrite_property_in_shapes(old_prop, new_prop, shapes, property_shape_nodes, shacl_graph):
+    for blank_node in property_shape_nodes:
+        if old_prop in shacl_graph.objects(blank_node, SH_path):
+            shacl_graph.remove((blank_node, SH_path, old_prop))
+            shacl_graph.add((blank_node, SH_path, new_prop))
 
 
 def apply_property_semantics(g, prop, focus_nodes, same_nodes, class_targets):
