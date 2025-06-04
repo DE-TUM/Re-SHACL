@@ -1,2 +1,6 @@
 /.idea
 *.pyc
+*.ttl
+*.ttl
+source/ShapesGraphs/test.ttl
+source/Datasets/test.ttl

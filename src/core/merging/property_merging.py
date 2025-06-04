@@ -12,9 +12,10 @@ from src.core.owl_semantics import (
 
 
 def merge_same_property(g, properties, focus_nodes, same_nodes, class_targets, shapes, property_shape_nodes, shacl_graph):
+    properties_set = set(properties)  # Used to conditionally rewrite shapes
     for focus_property in properties:
         merge_subproperties(g, focus_property)
-        merge_equivalent_properties(g, focus_property, shapes, property_shape_nodes, shacl_graph)
+        merge_equivalent_properties(g, focus_property, properties_set, shapes, property_shape_nodes, shacl_graph)
         apply_property_semantics(g, focus_property, focus_nodes, same_nodes, class_targets)
 
 
@@ -38,7 +39,7 @@ def merge_subproperties(g, focus_property):
             g.remove((sub_p, RDFS.subPropertyOf, focus_property))
 
 
-def merge_equivalent_properties(g, focus_property, shapes, property_shape_nodes, shacl_graph):
+def merge_equivalent_properties(g, focus_property, properties_set, shapes, property_shape_nodes, shacl_graph):
     while not all_property_merged(g, focus_property):
         _replace_equivalent_predicates(g, focus_property, OWL.equivalentProperty)
         _replace_equivalent_predicates(g, focus_property, OWL.sameAs)
@@ -60,20 +61,29 @@ def merge_equivalent_properties(g, focus_property, shapes, property_shape_nodes,
                 g.remove((subj, same_p, obj))
                 g.add((subj, focus_property, obj))
 
-            rewrite_property_in_shapes(same_p, focus_property, shapes, property_shape_nodes, shacl_graph)
+            if same_p in properties_set:
+                rewrite_property_in_shapes(same_p, focus_property, shapes, property_shape_nodes, shacl_graph)
+
             g.remove((focus_property, OWL.sameAs, same_p))
 
 
 def _replace_equivalent_predicates(g, focus_property, predicate):
     for p in g.subjects(predicate, focus_property):
-        g.remove((p, predicate, focus_property))
-        g.add((focus_property, OWL.sameAs, p))
+        if p != focus_property:
+            g.remove((p, predicate, focus_property))
+            g.add((focus_property, OWL.sameAs, p))
     for p in g.objects(focus_property, predicate):
-        g.remove((focus_property, predicate, p))
-        g.add((focus_property, OWL.sameAs, p))
+        if p != focus_property:
+            g.remove((focus_property, predicate, p))
+            g.add((focus_property, OWL.sameAs, p))
+
+    # Clean reflexive sameAs if present
+    g.remove((focus_property, OWL.sameAs, focus_property))
 
 
 def rewrite_property_in_shapes(old_prop, new_prop, shapes, property_shape_nodes, shacl_graph):
+    if old_prop == new_prop:
+        return
     for blank_node in property_shape_nodes:
         if old_prop in shacl_graph.objects(blank_node, SH_path):
             shacl_graph.remove((blank_node, SH_path, old_prop))

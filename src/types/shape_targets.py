@@ -1,9 +1,13 @@
 from dataclasses import dataclass
 from typing import Set, Dict
+
+from pyshacl import ShapesGraph
 from rdflib import Graph, Namespace, RDFS
 from rdflib.term import Node
 from pyshacl.consts import SH_path, SH_node
 from pyshacl.pytypes import GraphLike
+
+from src.types import GraphsBundle
 
 SH = Namespace("http://www.w3.org/ns/shacl#")
 SH_class = SH["class"]
@@ -21,15 +25,20 @@ class ShapeTargets:
     property_shape_nodes: Set[Node]
 
     @classmethod
-    def from_shapes(cls, shapes, data_graph: GraphLike) -> "ShapeTargets":
-        instance = cls._initialize_empty()
+    def from_graph_bundle(cls, graphs: GraphsBundle) -> "ShapeTargets":
+        st = cls._initialize_empty()
+        shapes_graph = ShapesGraph(graphs.shapes_graph, None)
+        shapes = shapes_graph.shapes
+
         for shape in shapes:
-            cls._extract_targets_and_shapes(shape, data_graph, instance)
-        cls._expand_sub_properties(data_graph, instance)
-        cls._expand_sub_classes(data_graph, instance)
-        cls._discover_additional_focus_nodes(data_graph, instance)
-        cls._init_same_as_dict(instance)
-        return instance
+            cls._extract_targets_and_shapes(shape, graphs.data_graph, st)
+
+        cls._expand_sub_properties(graphs.data_graph, st)
+        cls._expand_sub_classes(graphs.data_graph, st)
+        cls._discover_additional_focus_nodes(graphs.data_graph, st)
+        cls._init_same_as_dict(st)
+
+        return st
 
     @staticmethod
     def _initialize_empty() -> "ShapeTargets":

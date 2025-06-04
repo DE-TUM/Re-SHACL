@@ -3,12 +3,14 @@ from pyshacl.consts import SH_targetNode
 
 
 def merge_same_focus(g, same_nodes, focus, target_nodes, shapes, shacl_graph):
+    if focus not in same_nodes:
+        same_nodes[focus] = set()
+
     normalize_sameAs_edges(g, focus)
 
     for o in list(g.objects(focus, OWL.sameAs)):
         if o == focus:
-            g.remove((focus, OWL.sameAs, focus))
-            continue
+            continue  # remove later
 
         merge_focus_equivalents(g, focus, o)
         update_same_nodes_dict(same_nodes, focus, o)
@@ -17,6 +19,8 @@ def merge_same_focus(g, same_nodes, focus, target_nodes, shapes, shacl_graph):
             rewrite_shape_target_nodes(shapes, shacl_graph, o, focus)
 
         g.remove((focus, OWL.sameAs, o))
+
+    g.remove((focus, OWL.sameAs, focus))  # cleanup for reflexive link
 
 
 def normalize_sameAs_edges(g, focus):
@@ -34,6 +38,14 @@ def merge_focus_equivalents(g, focus, other):
     for s, p in list(g.subject_predicates(other)):
         g.remove((s, p, other))
         g.add((s, p, focus))
+
+    for o_eq in g.objects(other, OWL.sameAs):
+        if o_eq != focus:
+            g.add((focus, OWL.sameAs, o_eq))
+
+    for s_eq in g.subjects(OWL.sameAs, other):
+        if s_eq != focus:
+            g.add((focus, OWL.sameAs, s_eq))
 
 
 def update_same_nodes_dict(same_nodes, focus, other):

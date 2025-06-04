@@ -1,0 +1,43 @@
+@prefix : <http://example.org/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+:Human a owl:Class .
+:Person a owl:Class .
+:Agent a owl:Class .
+:Mortal a owl:Class .
+:Entity a owl:Class .
+:Being a owl:Class .
+
+# Equivalence and subclass chain
+:Person owl:equivalentClass :Human .
+:Human rdfs:subClassOf :Agent .
+:Agent rdfs:subClassOf :Mortal .
+
+# NEW: Equivalence loop
+:Human owl:equivalentClass :Entity .
+:Entity owl:equivalentClass :Being .
+:Being owl:equivalentClass :Human .
+
+# Property chains and equivalence
+:knows rdfs:domain :Person ;
+       rdfs:range :Person .
+
+:relatedTo rdfs:subPropertyOf :knows .
+:connectedWith owl:equivalentProperty :relatedTo .
+
+# Instances with chaining
+:john a :Human .
+:john :connectedWith :mary .
+
+# Add sameAs chain
+:john owl:sameAs :jonathan .
+:jonathan owl:sameAs :johnny .
+
+# One more property to test inverse
+:hasFriend a owl:ObjectProperty ;
+    owl:inverseOf :knows .
+
+# Reflexive type
+:john a :john .

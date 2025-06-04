@@ -2,20 +2,39 @@ from rdflib import RDF
 from rdflib.namespace import OWL, RDFS
 from pyshacl.consts import RDFS_subClassOf
 
+
 def _add_type_and_track(g, node, cls, target_nodes, same_nodes):
-    g.add((node, RDF.type, cls))
+    """
+    Adds type triple and expands through equivalentClass and subClassOf closure.
+    """
+    types_to_add = {cls}
+    types_to_add.update(g.objects(cls, OWL.equivalentClass))
+    types_to_add.update(g.subjects(OWL.equivalentClass, cls))
+    types_to_add.update(g.transitive_objects(cls, RDFS_subClassOf))
+
+    for inferred_cls in types_to_add:
+        g.add((node, RDF.type, inferred_cls))
+
     if cls in target_nodes and node not in target_nodes:
         target_nodes.add(node)
         same_nodes[node] = set()
 
 
 def _expand_property_type(g, prop, cls, target_nodes, same_nodes):
-    # Get all equivalent and subproperties
-    all_props = set(g.transitive_subjects(RDFS_subClassOf, prop)).union(
+    """
+    Expands property-based typing using rdfs:range or rdfs:domain
+    through equivalentProperty and subPropertyOf closure.
+    """
+    # Materialize: owl:equivalentProperty(x, y) ⇒ rdfs:subPropertyOf(x, y)
+    for ep in g.transitive_objects(prop, OWL.equivalentProperty):
+        g.add((ep, RDFS.subPropertyOf, prop))
+    for ep in g.transitive_subjects(OWL.equivalentProperty, prop):
+        g.add((ep, RDFS.subPropertyOf, prop))
+
+    all_props = set(g.transitive_subjects(RDFS.subPropertyOf, prop)).union(
         g.transitive_objects(prop, OWL.equivalentProperty),
         g.transitive_subjects(OWL.equivalentProperty, prop)
     )
-
     all_props.add(prop)
 
     for p in all_props:
@@ -31,11 +50,19 @@ def target_range(g, target_nodes, same_nodes, target_classes):
 
 
 def target_domain_range(g, target_nodes, same_nodes, target_classes):
-    for cls in target_classes:
-        for prop in g.subjects(RDFS.range, cls):
-            _expand_property_type(g, prop, cls, target_nodes, same_nodes)
-        for prop in g.subjects(RDFS.domain, cls):
-            _expand_property_type(g, prop, cls, target_nodes, same_nodes)
+    """
+    Applies both domain and range-based typing until closure is reached.
+    """
+    changed = True
+    while changed:
+        changed = False
+        initial_size = len(target_nodes)
+        for cls in target_classes:
+            for prop in g.subjects(RDFS.range, cls):
+                _expand_property_type(g, prop, cls, target_nodes, same_nodes)
+            for prop in g.subjects(RDFS.domain, cls):
+                _expand_property_type(g, prop, cls, target_nodes, same_nodes)
+        changed = len(target_nodes) > initial_size
 
 
 def check_domain_range(g, p, target_nodes, same_nodes, target_classes):
