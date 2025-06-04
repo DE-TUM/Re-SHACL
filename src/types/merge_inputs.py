@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 from typing import Set, Dict
-from pyshacl import ShapesGraph
 from rdflib import Graph, Namespace, RDFS
 from rdflib.term import Node
 from pyshacl.consts import SH_path, SH_node
 from pyshacl.pytypes import GraphLike
-from src.types import GraphsBundle
+from src.types.graphs_bundle import GraphsBundle
+
 
 SH = Namespace("http://www.w3.org/ns/shacl#")
 SH_class = SH["class"]

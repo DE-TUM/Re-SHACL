@@ -1,4 +1,4 @@
-from .shape_targets import ShapeTargets
+from .merge_inputs import MergeInputs
 from .graphs_bundle import GraphsBundle
 
-__all__ = ["ShapeTargets", "GraphsBundle"]
+__all__ = ["MergeInputs", "GraphsBundle"]

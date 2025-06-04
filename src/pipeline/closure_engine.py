@@ -1,146 +1,163 @@
-from rdflib import RDFS, RDF, OWL
+"""
+closure_engine.py
+-----------------
+Runs the three execution steps of the Re-SHACL graph–merging algorithm:
+
+    Step 1  (extraction)   – already handled in extract_merge_inputs()
+    Step 2 · Phase 1       – class–related reasoning
+    Step 2 · Phase 2       – property–path reasoning
+    Step 3                – owl:sameAs entity merging
+    Step 4                – shape rewriting (TBD)
+
+The loop iterates Phase 1 ➝ Phase 2 ➝ Same-As merge ➝ node-expansion until
+no new triples / classes / paths / focus nodes are added.
+"""
+
+import logging
+from rdflib import RDF, RDFS, OWL, Namespace
+from pyshacl.consts import SH_path, SH_node
 
 from src.core.owl_semantics.domain_range import target_domain_range, target_range
-from ..core.merging import (
-    merge_same_focus,
-    merge_same_property,
-    merge_target_classes,
-)
+from ..core.merging import merge_same_focus, merge_same_property, merge_target_classes
 from ..utils.merge_helpers import (
     all_focus_merged,
     all_samePath_merged,
-    all_targetClasses_merged,
+    all_targetClasses_merged,   # kept for debugging / unit-tests
 )
 
-from ..types import GraphsBundle, ShapeTargets
+from ..types import GraphsBundle
+from ..types.merge_inputs import MergeInputs
 
-# -------------------------------------------------------------
-# closure_engine.py  –  updated run_closure_loop (v2, stable)
-# -------------------------------------------------------------
-from rdflib.namespace import RDFS
+# --- SHACL constants ----------------------------------------------------
+SH = Namespace("http://www.w3.org/ns/shacl#")
+SH_class = SH["class"]
 
-MAX_PASSES          = 25_000   # absolute safety valve
-STABLE_THRESHOLD    = 2        # how many identical snapshots ⇒ convergence
+# --- logging ------------------------------------------------------------
+log = logging.getLogger(__name__)
 
-
-def _snapshot(g, targets):
-    """Returns an (int, int, int, int) = (#triples, #classes, #paths, #focus)."""
-    return (
-        len(g),
-        len(targets.target_classes),
-        len(targets.property_paths),
-        len(targets.focus_nodes),
-    )
+# ---- algorithm constants ----------------------------------------------
+MAX_PASSES       = 25_000   # absolute safety valve
+STABLE_THRESHOLD = 2        # identical snapshots ⇒ convergence
 
 
-def run_closure_loop(graphs: GraphsBundle, shapes, targets: ShapeTargets):
+# ----------------------------------------------------------------------- #
+#  Public entry point
+# ----------------------------------------------------------------------- #
+def run_closure_loop(graphs: GraphsBundle, inputs: MergeInputs) -> None:
     """
-    Alternating materialisation / merge loop that finishes when the graph
-    and all convergence-relevant target sets have stopped growing.
+    Executes Phase 1 → Phase 2 inside a fix-point loop, then performs a final
+    subclass/subproperty closure.
+
+    Args
+    ----
+    graphs : GraphsBundle       The data + shapes graph bundle.
+    inputs : MergeInputs        The C, P, F, N structures extracted earlier.
     """
     g  = graphs.data_graph
     sg = graphs.shapes_graph
+    shapes = sg.shapes
 
-    # ---------- bootstrap -------------------------------------------------
-    target_domain_range(
-        g, targets.focus_nodes, targets.same_as_dict, targets.target_classes
-    )
-    _resolve_all_same_as_clusters(g, sg, shapes, targets)
-
-    # ---------- main fixed-point iteration --------------------------------
-    prev_snap      = _snapshot(g, targets)
-    stable_counter = 0
+    prev_snap, stable = _snapshot(g, inputs), 0
+    log.debug("closure-loop start  | %s", prev_snap)
 
     for passes in range(1, MAX_PASSES + 1):
+        _run_phase_1_class_reasoning(g, inputs)
+        _run_phase_2_property_reasoning(graphs, inputs)
+        _run_step_3_same_as(g, sg, shapes, inputs)
+        _expand_discovered_focus_nodes(g, inputs)
 
-        # -- step 1: class / property merges --------------------------------
-        merge_target_classes(
-            g,
-            targets.focus_nodes,
-            targets.same_as_dict,
-            targets.target_classes,
-        )
-
-        target_range(
-            g, targets.focus_nodes, targets.same_as_dict, targets.target_classes
-        )
-
-        merge_same_property(
-            g,
-            targets.property_paths,
-            targets.focus_nodes,
-            targets.same_as_dict,
-            targets.target_classes,
-            shapes,
-            targets.property_shape_nodes,
-            sg,
-        )
-
-        # -- step 2: local RDFS/OWL closures --------------------------------
-        _add_subclass_closure(g, targets.focus_nodes)
-        _add_subproperty_closure(g, targets.focus_nodes)
-
-        # -- step 3: sameAs cluster reduction -------------------------------
-        _resolve_all_same_as_clusters(g, sg, shapes, targets)
-
-        # -- step 4: bring in any newly discovered focus nodes --------------
-        _expand_discovered_focus_nodes(g, targets)
-
-        # -- step 5: did *anything* grow? -----------------------------------
-        snap = _snapshot(g, targets)
+        snap = _snapshot(g, inputs)
+        log.debug("iteration %-6d | %s", passes, snap)
 
         if snap == prev_snap:
-            stable_counter += 1
-            if stable_counter >= STABLE_THRESHOLD:
-                # Graph + targets stable → done
-                return
+            stable += 1
+            if stable >= STABLE_THRESHOLD:
+                break
         else:
-            stable_counter = 0  # reset   – still making progress
-
+            stable = 0
         prev_snap = snap
+    else:
+        raise RuntimeError("closure_loop exceeded MAX_PASSES without convergence")
 
-    # ----------------------------------------------------------------------
-    # exceeded MAX_PASSES
-    raise RuntimeError(
-        f"run_closure_loop: exceeded {MAX_PASSES} iterations without convergence "
-        f"(last snapshot {prev_snap})"
-    )
+    # final local closures (subClassOf / subPropertyOf)
+    _add_subclass_closure(g, inputs.focus_nodes)
+    _add_subproperty_closure(g, inputs.focus_nodes)
+    log.debug("closure-loop done   | %s", _snapshot(g, inputs))
 
 
+# ----------------------------------------------------------------------- #
+#  Phase 1  — class-related reasoning
+# ----------------------------------------------------------------------- #
+def _run_phase_1_class_reasoning(g, inputs: MergeInputs) -> None:
+    log.debug("Phase 1  (class)")
+    target_domain_range(g, inputs.focus_nodes, inputs.same_as_dict, inputs.target_classes)
+    _add_subclass_closure(g, inputs.focus_nodes)
+    merge_target_classes(g, inputs.focus_nodes, inputs.same_as_dict, inputs.target_classes)
+    target_range(g, inputs.focus_nodes, inputs.same_as_dict, inputs.target_classes)
 
-def _resolve_all_same_as_clusters(g, sg, shapes, targets: ShapeTargets):
-    for node in list(targets.focus_nodes):
-        while not all_focus_merged(g, node, targets.focus_nodes):
-            merge_same_focus(g, targets.same_as_dict, node, targets.target_nodes, shapes, sg)
 
-def _closure_converged(g, targets: ShapeTargets) -> bool:
-    return all_targetClasses_merged(g, targets.target_classes) and all_samePath_merged(g, targets.property_paths)
+# ----------------------------------------------------------------------- #
+#  Phase 2  — property-path reasoning
+# ----------------------------------------------------------------------- #
+def _run_phase_2_property_reasoning(graphs: GraphsBundle, inputs: MergeInputs) -> None:
+    log.debug("Phase 2  (properties)")
+    g = graphs.data_graph
+    merge_same_property(graphs, inputs)
+    _add_subproperty_closure(g, inputs.focus_nodes)
 
-def _expand_discovered_focus_nodes(g, targets: ShapeTargets) -> bool:
-    new_nodes = []
-    for path in targets.shape_path_properties:
-        for obj in g.objects(None, path):
-            if obj not in targets.focus_nodes:
-                new_nodes.append(obj)
 
-    if new_nodes:
-        for obj in new_nodes:
-            targets.focus_nodes.add(obj)
-            targets.same_as_dict[obj] = set()
-        return True
-    return False
+# ----------------------------------------------------------------------- #
+#  Step 3   — owl:sameAs entity merging
+# ----------------------------------------------------------------------- #
+def _run_step_3_same_as(g, sg, shapes, inputs: MergeInputs) -> None:
+    log.debug("Step 3   (sameAs merge)")
+    target_nodes = set(inputs.same_as_dict.keys())
+    for node in list(inputs.focus_nodes):
+        while not all_focus_merged(g, node, inputs.focus_nodes):
+            merge_same_focus(g, inputs.same_as_dict, node, target_nodes, shapes, sg)
 
-def _add_subproperty_closure(g, focus_nodes: set):
+
+# ----------------------------------------------------------------------- #
+#  Helper functions
+# ----------------------------------------------------------------------- #
+def _snapshot(g, inputs: MergeInputs) -> tuple[int, int, int, int]:
+    """ (#triples, |C|, |F|, |P| ) """
+    return len(g), len(inputs.target_classes), len(inputs.property_paths), len(inputs.focus_nodes)
+
+
+def _expand_discovered_focus_nodes(g, inputs: MergeInputs) -> None:
+    new = {
+        obj
+        for p in _shape_path_properties(g)
+        for obj in g.objects(None, p)
+        if obj not in inputs.focus_nodes
+    }
+    if new:
+        for n in new:
+            inputs.focus_nodes.add(n)
+            inputs.same_as_dict[n] = set()
+        log.debug("  +%d new focus nodes", len(new))
+
+
+def _shape_path_properties(g):
+    return {
+        p
+        for s, p, _ in g.triples((None, SH_path, None))
+        if (s, SH_node, None) in g or (s, SH_class, None) in g
+    }
+
+
+def _add_subproperty_closure(g, focus_nodes: set) -> None:
     for node in focus_nodes:
         for p, o in g.predicate_objects(node):
             for super_p in g.transitive_objects(p, RDFS.subPropertyOf):
                 if super_p != p:
                     g.add((node, super_p, o))
 
-def _add_subclass_closure(g, focus_nodes: set):
+
+def _add_subclass_closure(g, focus_nodes: set) -> None:
     for node in focus_nodes:
         for cls in g.objects(node, RDF.type):
-            # Skip if cls is a property (avoid corrupting graph)
             if (cls, RDF.type, RDF.Property) in g or (cls, RDF.type, OWL.ObjectProperty) in g:
                 continue
             for super_cls in g.transitive_objects(cls, RDFS.subClassOf):

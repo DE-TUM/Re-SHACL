@@ -1,78 +1,47 @@
 from typing import Union, Optional
-
-import rdflib
-from pyshacl.monkey import rdflib_bool_patch, rdflib_bool_unpatch
-from pyshacl.pytypes import GraphLike
-from pyshacl.rdfutil import load_from_source
-from pyshacl import ShapesGraph
 from rdflib import Graph, Dataset, ConjunctiveGraph
+from pyshacl import ShapesGraph
+from pyshacl.pytypes import GraphLike
+from pyshacl.monkey import rdflib_bool_patch, rdflib_bool_unpatch
+from pyshacl.rdfutil import load_from_source
 
-def load_graph(data_graph: Union[GraphLike, str, bytes],
-               shacl_graph: Optional[Union[GraphLike, str, bytes]] = None,
-               data_graph_format: Optional[str] = None,
-               shacl_graph_format: Optional[str] = None,
-               ):
-    loaded_dg = load_from_source(data_graph, rdf_format=data_graph_format, multigraph=True, do_owl_imports=False)
-    if not isinstance(loaded_dg, rdflib.Graph):
-        raise RuntimeError("data_graph must be a rdflib Graph object")
 
-    if shacl_graph is not None:
-        rdflib_bool_patch()
-        loaded_sg = load_from_source(
-            shacl_graph, rdf_format=shacl_graph_format, multigraph=False, do_owl_imports=False)
-        rdflib_bool_unpatch()
+def load_data_graph(source: Union[GraphLike, str, bytes], rdf_format: Optional[str] = None) -> Graph:
+    """
+    Loads a data graph from path, bytes, or Graph-like input.
+    If it's a dataset or conjunctive graph, returns the first named graph.
+    """
+    graph = load_from_source(source, rdf_format=rdf_format, multigraph=True, do_owl_imports=False)
+
+    if isinstance(graph, (Dataset, ConjunctiveGraph)):
+        return _extract_named_graphs(graph)[0]
+    elif isinstance(graph, Graph):
+        return graph
     else:
-        loaded_sg = None
-
-    assert isinstance(loaded_sg, rdflib.Graph), "shacl_graph must be a rdflib Graph object"
-    shape_graph = ShapesGraph(loaded_sg, None)  # type: ShapesGraph
-
-    shapes = shape_graph.shapes  # This property getter triggers shapes harvest.
-
-    the_target_graph = loaded_dg
-    if isinstance(the_target_graph, (rdflib.Dataset, rdflib.ConjunctiveGraph)):
-        named_graphs = [
-            rdflib.Graph(the_target_graph.store, i, namespace_manager=the_target_graph.namespace_manager)
-            if not isinstance(i, rdflib.Graph)
-            else i
-            for i in the_target_graph.store.contexts(None)
-        ]
-    else:
-        named_graphs = [the_target_graph]
-
-    return shapes, named_graphs, shape_graph
+        raise ValueError("Unsupported RDF input type for data graph.")
 
 
-def load_data_graph(path: str, format: str = "turtle") -> Graph:
-    g = Graph()
-    g.parse(path, format=format)
+def load_shapes_graph(source: Union[GraphLike, str, bytes], rdf_format: Optional[str] = None) -> ShapesGraph:
+    """
+    Loads a SHACL shapes graph from path, bytes, or Graph-like input.
+    Wraps the result in a ShapesGraph and triggers shape extraction.
+    """
+    rdflib_bool_patch()
+    graph = load_from_source(source, rdf_format=rdf_format, multigraph=False, do_owl_imports=False)
+    rdflib_bool_unpatch()
 
-    if isinstance(g, (Dataset, ConjunctiveGraph)):
-        named_graphs = _extract_named_graphs(g)
-        return named_graphs[0]  # preserve old behavior, but make it explicit
-    elif isinstance(g, Graph):
-        return g
-    else:
-        raise ValueError("Unsupported RDF input type.")
+    if not isinstance(graph, Graph):
+        raise ValueError("SHACL graph must be a single rdflib.Graph")
+
+    return ShapesGraph(graph, None)
 
 
 def _extract_named_graphs(dataset: Union[Dataset, ConjunctiveGraph]) -> list[Graph]:
+    """
+    Converts all named graphs in a dataset into rdflib.Graph objects.
+    """
     return [
         Graph(dataset.store, ctx, namespace_manager=dataset.namespace_manager)
-        if not isinstance(ctx, Graph)
-        else ctx
+        if not isinstance(ctx, Graph) else ctx
         for ctx in dataset.store.contexts(None)
     ]
-
-
-def load_shapes_graph(path: str, format: str = "turtle") -> ShapesGraph:
-    sg = Graph()
-    sg.parse(path, format=format)
-    shapes_graph = ShapesGraph(sg, None)
-
-    return shapes_graph
-
-
-
-
-

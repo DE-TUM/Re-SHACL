@@ -1,5 +1,8 @@
 from rdflib.namespace import OWL, RDFS
 from pyshacl.consts import SH_path
+
+from src.types import GraphsBundle
+from src.types.merge_inputs import MergeInputs
 from src.utils.merge_helpers import all_subProperties_merged, all_property_merged
 from src.core.owl_semantics.domain_range import check_domain_range
 from src.core.owl_semantics import (
@@ -11,12 +14,37 @@ from src.core.owl_semantics import (
 )
 
 
-def merge_same_property(g, properties, focus_nodes, same_nodes, class_targets, shapes, property_shape_nodes, shacl_graph):
-    properties_set = set(properties)  # Used to conditionally rewrite shapes
-    for focus_property in properties:
+def merge_same_property(graphs: GraphsBundle, inputs: MergeInputs):
+    g = graphs.data_graph
+    shacl_graph = graphs.shapes_graph.graph
+    shapes = graphs.shapes_graph.shapes
+
+    properties_set = set(inputs.property_paths)
+
+    # Compute this locally — no longer passed
+    property_shape_nodes = {
+        ps
+        for shape in shapes
+        for ps in shape.property_shapes()
+    }
+
+    for focus_property in inputs.property_paths:
         merge_subproperties(g, focus_property)
-        merge_equivalent_properties(g, focus_property, properties_set, shapes, property_shape_nodes, shacl_graph)
-        apply_property_semantics(g, focus_property, focus_nodes, same_nodes, class_targets)
+        merge_equivalent_properties(
+            g,
+            focus_property,
+            properties_set,
+            shapes,
+            property_shape_nodes,
+            shacl_graph,
+        )
+        apply_property_semantics(
+            g,
+            focus_property,
+            inputs.focus_nodes,
+            inputs.same_as_dict,
+            inputs.target_classes,
+        )
 
 
 def merge_subproperties(g, focus_property):
