@@ -483,8 +483,8 @@ def merge_target_classes(g, found_node_targets, same_nodes, target_classes):  #T
     
             
         
-def merge_same_property(g, properties, found_node_targets, same_nodes, target_classes, shapes, target_property, shacl_graph):
-    for focus_property in properties:
+def merge_same_property(g, path_value, found_node_targets, same_nodes, target_classes, shapes, target_property, shacl_graph):
+    for focus_property in path_value:
 
         while not all_subProperties_merged(g, focus_property):
             #print("Merge subProperties")
@@ -540,7 +540,7 @@ def merge_same_property(g, properties, found_node_targets, same_nodes, target_cl
                         g.add((s, focus_property, o))
                         g.remove((s, same_property, o))
                     
-                    if same_property in properties:    
+                    if same_property in path_value:
                         # properties.remove(same_property) 
                         for s in shapes:  # Shapes graph re-writing
                             for blin in target_property:

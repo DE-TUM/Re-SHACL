@@ -46,13 +46,12 @@ def all_subProperties_merged(g, p):
     return not any(g.subjects(RDFS.subPropertyOf, p))
 
 
-def all_focus_merged(g, focus, target_nodes):
-    if any(g.objects(focus, OWL.sameAs)):
-        return False
-    for s in g.subjects(OWL.sameAs, focus):
-        if s not in target_nodes:
-            return False
-    return True
+def all_focus_merged(g, focus):
+    return (
+        not any(g.objects(focus, OWL.sameAs))
+        and not any(g.subjects(OWL.sameAs, focus))
+    )
+
 
 
 def all_targetClasses_merged(g, target_classes):
@@ -73,3 +72,36 @@ def sameClasses_merged(g, target_class):
         (OWL.equivalentClass, 'subj')
     ]
     return not has_merge_candidates(g, target_class, merge_preds)
+
+def print_not_merged_status(g, inputs):
+    merge_preds_class = [
+        (OWL.sameAs, 'obj'),
+        (OWL.sameAs, 'subj'),
+        (OWL.equivalentClass, 'obj'),
+        (OWL.equivalentClass, 'subj')
+    ]
+    merge_preds_path = [
+        (OWL.sameAs, 'obj'),
+        (OWL.sameAs, 'subj'),
+        (OWL.equivalentProperty, 'obj'),
+        (OWL.equivalentProperty, 'subj'),
+        (RDFS.subPropertyOf, 'subj')
+    ]
+
+    unmerged_classes = [
+        cls for cls in inputs.target_classes
+        if has_merge_candidates(g, cls, merge_preds_class)
+    ]
+    unmerged_paths = [
+        path for path in inputs.property_paths
+        if has_merge_candidates(g, path, merge_preds_path)
+    ]
+
+    print(f"⏳ Still unmerged:")
+    print(f"  • {len(unmerged_classes)} class targets have owl:sameAs / owl:equivalentClass")
+    print(f"  • {len(unmerged_paths)} property paths have owl:sameAs / owl:equivalentProperty / subPropertyOf")
+
+    if unmerged_classes:
+        print(f"    → Sample classes: {unmerged_classes[:5]}")
+    if unmerged_paths:
+        print(f"    → Sample paths: {unmerged_paths[:5]}")

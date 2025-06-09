@@ -34,14 +34,13 @@ def merge_same_property(graphs: GraphsBundle, inputs: MergeInputs):
             g,
             focus_property,
             properties_set,
-            shapes,
             property_shape_nodes,
             shacl_graph,
         )
         apply_property_semantics(
             g,
             focus_property,
-            inputs.focus_nodes,
+            inputs.discovered_focus_nodes,
             inputs.same_as_dict,
             inputs.target_classes,
         )
@@ -67,7 +66,7 @@ def merge_subproperties(g, focus_property):
             g.remove((sub_p, RDFS.subPropertyOf, focus_property))
 
 
-def merge_equivalent_properties(g, focus_property, properties_set, shapes, property_shape_nodes, shacl_graph):
+def merge_equivalent_properties(g, focus_property, properties_set, property_shape_nodes, shacl_graph):
     while not all_property_merged(g, focus_property):
         _replace_equivalent_predicates(g, focus_property, OWL.equivalentProperty)
         _replace_equivalent_predicates(g, focus_property, OWL.sameAs)
@@ -90,7 +89,7 @@ def merge_equivalent_properties(g, focus_property, properties_set, shapes, prope
                 g.add((subj, focus_property, obj))
 
             if same_p in properties_set:
-                rewrite_property_in_shapes(same_p, focus_property, shapes, property_shape_nodes, shacl_graph)
+                rewrite_property_in_shapes(same_p, focus_property, property_shape_nodes, shacl_graph)
 
             g.remove((focus_property, OWL.sameAs, same_p))
 
@@ -109,7 +108,7 @@ def _replace_equivalent_predicates(g, focus_property, predicate):
     g.remove((focus_property, OWL.sameAs, focus_property))
 
 
-def rewrite_property_in_shapes(old_prop, new_prop, shapes, property_shape_nodes, shacl_graph):
+def rewrite_property_in_shapes(old_prop, new_prop, property_shape_nodes, shacl_graph):
     if old_prop == new_prop:
         return
     for blank_node in property_shape_nodes:
@@ -118,10 +117,10 @@ def rewrite_property_in_shapes(old_prop, new_prop, shapes, property_shape_nodes,
             shacl_graph.add((blank_node, SH_path, new_prop))
 
 
-def apply_property_semantics(g, prop, focus_nodes, same_nodes, class_targets):
+def apply_property_semantics(g, prop, discovered_focus_nodes, same_nodes, class_targets):
     apply_symmetric_property(g, prop)
     apply_transitive_property(g, prop)
     apply_inverse_properties(g, prop)
-    check_domain_range(g, prop, focus_nodes, same_nodes, class_targets)
+    check_domain_range(g, prop, discovered_focus_nodes, same_nodes, class_targets)
     apply_functional_property(g, prop)
     apply_inverse_functional_property(g, prop)
