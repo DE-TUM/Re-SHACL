@@ -49,14 +49,19 @@ def run_closure_loop(graphs: GraphsBundle, inputs: MergeInputs) -> None:
 
     while _not_converged(g, inputs):
         passes += 1
+        print(f"ENTERING PASS {passes}")
         if passes > MAX_PASSES:
             raise RuntimeError("closure_loop exceeded MAX_PASSES")
 
+        print("running phase 1")
         _run_phase_1_class_reasoning(g, inputs)
+        print("running phase 2")
         _run_phase_2_property_reasoning(graphs, inputs)
+        print("running step 3")
         _run_step_3_same_as(graphs, inputs)
+        print("running focus node expansion")
         _expand_discovered_focus_nodes(g, inputs)
-
+        print("taking snapshot")
         snap = _snapshot(g, inputs)
         log.debug("iteration %-6d | %s", passes, snap)
 
@@ -67,11 +72,9 @@ def run_closure_loop(graphs: GraphsBundle, inputs: MergeInputs) -> None:
         else:
             stable = 0
         prev_snap = snap
-    else:
-        raise RuntimeError("closure_loop exceeded MAX_PASSES without convergence")
 
     # Final merge cleanup – catches late-discovered sameAs
-    for focus_node in list(inputs.discovered_focus_nodes):
+    for focus_node in (inputs.discovered_focus_nodes):
         while not all_focus_merged(graphs.data_graph, focus_node):
             merge_same_focus(graphs, inputs, focus_node)
 
@@ -116,7 +119,7 @@ def _run_phase_2_property_reasoning(graphs: GraphsBundle, inputs: MergeInputs) -
 def _run_step_3_same_as(graphs: GraphsBundle, inputs: MergeInputs) -> None:
     log.debug("Step 3   (sameAs merge)")
 
-    for focus_node in list(inputs.discovered_focus_nodes):
+    for focus_node in (inputs.discovered_focus_nodes):
         while not all_focus_merged(graphs.data_graph, focus_node):
             merge_same_focus(graphs, inputs, focus_node)
 

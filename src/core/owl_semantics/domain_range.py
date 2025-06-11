@@ -21,10 +21,8 @@ def _infer_type_and_track(
     for inferred_cls in types_to_add:
         g.add((node, RDF.type, inferred_cls))
 
-    if (
-        (not track_if_cls_in_targets) or
-        (cls in target_classes)
-    ) and node not in discovered_focus_nodes:
+    should_track = (not track_if_cls_in_targets) or (cls in target_classes)
+    if should_track and node not in discovered_focus_nodes:
         discovered_focus_nodes.add(node)
         same_nodes[node] = set()
 
@@ -65,12 +63,26 @@ def _expand_property_type(
 
 
 def target_range(g, discovered_focus_nodes, same_nodes, target_classes):
-    for cls in target_classes:
-        for prop in g.subjects(RDFS.range, cls):
-            _expand_property_type(
-                g, prop, cls, discovered_focus_nodes, same_nodes, target_classes,
-                on_subject=False
-            )
+    changed = True
+    while changed:
+        changed = False
+        start = len(discovered_focus_nodes)
+
+        for cls in target_classes:
+            for pp in g.subjects(RDFS.range, cls):
+                # add **ep ⊑ pp** for every equivalentProperty (legacy line)
+                for ep in g.transitive_objects(pp, OWL.equivalentProperty):
+                    g.add((ep, RDFS.subPropertyOf, pp))
+                for ep in g.transitive_subjects(OWL.equivalentProperty, pp):
+                    g.add((ep, RDFS.subPropertyOf, pp))
+
+                _expand_property_type(
+                    g, pp, cls,
+                    discovered_focus_nodes, same_nodes, target_classes,
+                    on_subject=False,
+                )
+
+        changed = len(discovered_focus_nodes) > start
 
 
 def target_domain_range(g, discovered_focus_nodes, same_nodes, target_classes):
@@ -93,15 +105,20 @@ def target_domain_range(g, discovered_focus_nodes, same_nodes, target_classes):
 
 
 def check_domain_range(g, p, discovered_focus_nodes, same_nodes, target_classes):
+    # ----- domain ------------------------------------------------------
     for cls in g.objects(p, RDFS.domain):
-        for s, _ in g.subject_objects(p):
+        for subj, _ in g.subject_objects(p):
             _infer_type_and_track(
-                g, s, cls, discovered_focus_nodes, same_nodes, target_classes,
-                track_if_cls_in_targets=True
+                g, subj, cls,
+                discovered_focus_nodes, same_nodes, target_classes,
+                track_if_cls_in_targets=True,   # ⇐ legacy rule
             )
+
+    # ----- range -------------------------------------------------------
     for cls in g.objects(p, RDFS.range):
-        for _, o in g.subject_objects(p):
+        for _, obj in g.subject_objects(p):
             _infer_type_and_track(
-                g, o, cls, discovered_focus_nodes, same_nodes, target_classes,
-                track_if_cls_in_targets=True
+                g, obj, cls,
+                discovered_focus_nodes, same_nodes, target_classes,
+                track_if_cls_in_targets=True,
             )

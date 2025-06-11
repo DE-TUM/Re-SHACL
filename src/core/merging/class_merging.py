@@ -1,114 +1,104 @@
-# ------------------------------------------------------------
-# class_merging.py   –   new merge_target_classes (cycle-free)
-# ------------------------------------------------------------
-
+# class_merging_legacy_loop.py  –  original semantics + super-map
 from rdflib.namespace import RDF, RDFS, OWL
 
 
-def merge_target_classes(g, discovered_focus_nodes, same_nodes, target_classes):
-    super_map = _build_superclass_map(g)
-    newly_found_nodes = set()
-    newly_found_classes = set()
-    seen_classes = set()
+def merge_target_classes(g,
+                         discovered_focus_nodes: set,
+                         same_nodes: dict,
+                         target_classes: set) -> None:
+    """
+    Original edge-by-edge rewriting loop (sameClasses_merged logic) **plus**
+    modern superclass-map propagation.
+    """
 
-    for cls in list(target_classes):
-        if cls in seen_classes:
-            continue
+    super_map          = _build_superclass_map(g)
+    delta_nodes        = set()           # instances newly seen
+    delta_classes      = set()           # classes touched
 
-        eq_classes = _expand_equivalent_classes(g, cls) | {cls}
-        seen_classes.update(eq_classes)
+    for cls in (target_classes):
+        while _has_equiv_links(g, cls):
+            # ---- ∀ in-edges  x ≡ cls  ----------------------------------
+            for x in (g.subjects(OWL.equivalentClass, cls)):
+                _rewrite_edge(g, x, cls, delta_nodes, same_nodes)
+                delta_classes.add(x)
+            for x in (g.subjects(OWL.sameAs, cls)):
+                _rewrite_edge(g, x, cls, delta_nodes, same_nodes)
 
-        if len(eq_classes) <= 1:
-            continue
+            # ---- ∀ out-edges cls ≡ y  ----------------------------------
+            for y in (g.objects(cls, OWL.equivalentClass)):
+                _rewrite_edge(g, cls, y, delta_nodes, same_nodes)
+                delta_classes.add(y)
+            for y in (g.objects(cls, OWL.sameAs)):
+                _rewrite_edge(g, cls, y, delta_nodes, same_nodes)
 
-        rep = _pick_representative(eq_classes)
-        delta_pairs = _sync_instance_types(g, rep, eq_classes, newly_found_nodes)
-        _add_symmetric_subclass_edges(g, rep, eq_classes)
-        _remove_equivalence_links(g, eq_classes)
-        _propagate_types_incremental(g, delta_pairs, super_map)
+    # -------- propagate rdf:type up the DAG once for all new instances ---
+    _propagate_types_incremental(g, delta_nodes, super_map)
 
-        newly_found_classes.update(eq_classes)
-
-    _update_tracking_structures(newly_found_nodes, newly_found_classes,
-                                same_nodes, discovered_focus_nodes, target_classes)
-
-
-# =========================== helpers =============================
-def _expand_equivalent_classes(g, cls):
-    todo, seen = {cls}, set()
-    while todo:
-        c = todo.pop()
-        if c in seen:
-            continue
-        seen.add(c)
-        todo.update(g.subjects(OWL.equivalentClass, c))
-        todo.update(g.objects(c, OWL.equivalentClass))
-        todo.update(g.subjects(OWL.sameAs, c))
-        todo.update(g.objects(c, OWL.sameAs))
-    seen.discard(cls)
-    return seen
-
-
-def _pick_representative(eq_classes):
-    return min(eq_classes)
-
-
-def _sync_instance_types(g, rep, eq_classes, newly_found_nodes):
-    delta_pairs = []
-    for eq_cls in eq_classes:
-        for inst in g.subjects(RDF.type, eq_cls):
-            g.add((inst, RDF.type, rep))
-            newly_found_nodes.add(inst)
-            delta_pairs.append((inst, rep))
-        for inst in g.subjects(RDF.type, rep):
-            g.add((inst, RDF.type, eq_cls))
-            delta_pairs.append((inst, eq_cls))
-    return delta_pairs
-
-
-def _add_symmetric_subclass_edges(g, rep, eq_classes):
-    for eq_cls in eq_classes:
-        if eq_cls != rep:
-            g.add((rep, RDFS.subClassOf, eq_cls))
-            g.add((eq_cls, RDFS.subClassOf, rep))
-
-
-def _remove_equivalence_links(g, eq_classes):
-    for a in eq_classes:
-        for b in eq_classes:
-            g.remove((a, OWL.equivalentClass, b))
-            g.remove((b, OWL.equivalentClass, a))
-            g.remove((a, OWL.sameAs, b))
-            g.remove((b, OWL.sameAs, a))
-
-
-def _update_tracking_structures(new_nodes, new_classes, same_nodes, focus_nodes, target_classes):
-    for inst in new_nodes:
+    # -------- bookkeeping ----------------------------------------------
+    for inst in delta_nodes:
         same_nodes.setdefault(inst, set())
-    focus_nodes.update(new_nodes)
-    target_classes.update(new_classes)
+    discovered_focus_nodes.update(delta_nodes)
+    target_classes.update(delta_classes)
+
+
+# ======================================================================
+# helper-routines
+# ======================================================================
+def _has_equiv_links(g, cls) -> bool:
+    return (
+        any(g.subjects(OWL.equivalentClass, cls)) or
+        any(g.objects(cls,  OWL.equivalentClass)) or
+        any(g.subjects(OWL.sameAs,          cls)) or
+        any(g.objects(cls,  OWL.sameAs))
+    )
+
+
+def _rewrite_edge(g, a, b, delta_nodes, same_nodes):
+    """
+    Implements *one* rewrite step:
+
+      a  (owl:sameAs | owl:equivalentClass)  b
+         ⇒
+      a ⊑ b   &   b ⊑ a  +  rdf:type copies  +  remove equiv triple
+    """
+    # copy rdf:type both directions
+    for inst in g.subjects(RDF.type, a):
+        g.add((inst, RDF.type, b)); delta_nodes.add(inst)
+    for inst in g.subjects(RDF.type, b):
+        g.add((inst, RDF.type, a)); delta_nodes.add(inst)
+
+    # drop equivalence triple (both directions for safety)
+    g.remove((a, OWL.equivalentClass, b))
+    g.remove((b, OWL.equivalentClass, a))
+    g.remove((a, OWL.sameAs,          b))
+    g.remove((b, OWL.sameAs,          a))
+
+    # add symmetric rdfs:subClassOf
+    g.add((a, RDFS.subClassOf, b))
+    g.add((b, RDFS.subClassOf, a))
+
+    # identity map
+    same_nodes.setdefault(a, set()).add(b)
 
 
 def _build_superclass_map(g):
     direct = {}
-    for sub, _, sup in g.triples((None, RDFS.subClassOf, None)):
-        direct.setdefault(sub, set()).add(sup)
+    for s, _, o in g.triples((None, RDFS.subClassOf, None)):
+        direct.setdefault(s, set()).add(o)
     supers = {c: set(p) for c, p in direct.items()}
     changed = True
     while changed:
         changed = False
-        for c in list(supers):
-            inherited = set()
-            for p in supers[c]:
-                inherited |= supers.get(p, set())
+        for c in (supers):
+            inherited = {p for p in supers[c] for p in supers.get(p, ())}
             if inherited - supers[c]:
                 supers[c].update(inherited)
                 changed = True
     return {c: frozenset(p) for c, p in supers.items()}
 
 
-def _propagate_types_incremental(g, delta_pairs, super_map):
-    for inst, cls in delta_pairs:
-        for sup in super_map.get(cls, ()):
-            g.add((inst, RDF.type, sup))
-# -----------------------------------------------------------------
+def _propagate_types_incremental(g, new_nodes, super_map):
+    for inst in new_nodes:
+        for cls in g.objects(inst, RDF.type):
+            for sup in super_map.get(cls, ()):
+                g.add((inst, RDF.type, sup))

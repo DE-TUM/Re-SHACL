@@ -30,67 +30,58 @@ from src.types.merge_inputs import MergeInputs
 def merge_same_focus(
     graphs: GraphsBundle,
     inputs: MergeInputs,
-    focus,  # surviving representative
+    focus,
 ) -> None:
-    """
-    Merge all nodes owl:sameAs-equivalent to *focus* into *focus* itself.
-
-    Side-effects
-    ------------
-    • graphs.data_graph   – triples copied / owl:sameAs normalised
-    • graphs.shapes_graph – sh:targetNode rewritten
-    • inputs.same_as_dict – identity map updated
-    """
     g: Graph = graphs.data_graph
     sg_wrapper = graphs.shapes_graph
     sg: Graph = sg_wrapper.graph
     shapes = sg_wrapper.shapes
-
     same_as_dict = inputs.same_as_dict
 
-    # -------------------------------------------------- 0. bookkeeping --
+    # -- bookkeeping
     same_as_dict.setdefault(focus, set())
 
-    if not any(g.objects(focus, OWL.sameAs)) and not any(g.subjects(OWL.sameAs, focus)):
-        return  # nothing to merge
+    # -- eq-sym: normalize direction
+    for subj in (g.subjects(OWL.sameAs, focus)):
+        if subj != focus:
+            g.remove((subj, OWL.sameAs, focus))
+            g.add((focus, OWL.sameAs, subj))
 
-    # -------------------------------------------------- 1. eq-sym -------
-    _normalise_same_as_edges(g, focus)
+    # -- eq-rep and rewire targets
+    for o in (g.objects(focus, OWL.sameAs)):
+        same_as_dict[focus].add(o)
 
-    # -------------------------------------------------- 2. merge loop ---
-    # Collect full sameAs transitive closure
-    to_merge = set()
-    stack = [focus]
+        if o != focus:
+            if o in same_as_dict:
+                same_as_dict[focus].update(same_as_dict[o])
+                del same_as_dict[o]
 
-    while stack:
-        current = stack.pop()
-        for neighbor in g.objects(current, OWL.sameAs):
-            if neighbor != focus and neighbor not in to_merge:
-                to_merge.add(neighbor)
-                stack.append(neighbor)
-        for neighbor in g.subjects(OWL.sameAs, current):
-            if neighbor != focus and neighbor not in to_merge:
-                g.remove((neighbor, OWL.sameAs, current))
-                to_merge.add(neighbor)
-                stack.append(neighbor)
+            for p, val in (g.predicate_objects(o)):
+                g.remove((o, p, val))
+                if p != OWL.sameAs:
+                    g.add((focus, p, val))
 
-    # Now merge all transitive nodes into focus
-    for other in to_merge:
-        _merge_equivalent_node(g, focus, other)
-        _update_identity_map(same_as_dict, focus, other)
-        _rewrite_shape_targets(shapes, sg, old=other, new=focus)
-        g.remove((focus, OWL.sameAs, other))
+            for subj, p in (g.subject_predicates(o)):
+                g.remove((subj, p, o))
+                if p != OWL.sameAs:
+                    g.add((subj, p, focus))
 
-    # -------------------------------------------------- 3. cleanup ------
-    g.remove((focus, OWL.sameAs, focus))
+            for shape in shapes:
+                if (shape.node, SH_targetNode, o) in sg:
+                    sg.remove((shape.node, SH_targetNode, o))
+                    sg.add((shape.node, SH_targetNode, focus))
 
+            g.remove((focus, OWL.sameAs, o))
+
+        else:
+            g.remove((focus, OWL.sameAs, focus))
 
 # ====================================================================== #
 #  Helper functions
 # ====================================================================== #
 def _normalise_same_as_edges(g: Graph, focus) -> None:
     """Flip  ?s owl:sameAs focus  →  focus owl:sameAs ?s   (eq-sym)."""
-    for subj in list(g.subjects(OWL.sameAs, focus)):
+    for subj in (g.subjects(OWL.sameAs, focus)):
         if subj != focus:
             g.remove((subj, OWL.sameAs, focus))
             g.add((focus, OWL.sameAs, subj))
@@ -98,12 +89,12 @@ def _normalise_same_as_edges(g: Graph, focus) -> None:
 
 def _merge_equivalent_node(g: Graph, focus, other) -> None:
     """Copy every triple that mentions *other* onto *focus*, skipping owl:sameAs."""
-    for p, o in list(g.predicate_objects(other)):
+    for p, o in (g.predicate_objects(other)):
         g.remove((other, p, o))
         if p != OWL.sameAs:
             g.add((focus, p, o))
 
-    for s, p in list(g.subject_predicates(other)):
+    for s, p in (g.subject_predicates(other)):
         g.remove((s, p, other))
         if p != OWL.sameAs:
             g.add((s, p, focus))

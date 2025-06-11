@@ -10,10 +10,10 @@ g2 = Graph()
 g2.parse("C:/Users/zenon/eclipse-workspace/Re-SHACL/src/fused_reshacl_test.ttl", format="ttl")
 
 # Compare
-if g1.isomorphic(g2):
-    print("✅ Graphs are equivalent (isomorphic).")
-else:
-    print("❌ Graphs are not equivalent.")
+# if g1.isomorphic(g2):
+#     print("✅ Graphs are equivalent (isomorphic).")
+# else:
+#     print("❌ Graphs are not equivalent.")
 
 
 print("Triples in g1 but not in g2:")
