@@ -15,9 +15,10 @@ from ..utils.merge_helpers import (
     all_samePath_merged,
     all_targetClasses_merged, print_not_merged_status,
 )
+from ..utils.safe_transitive import safe_transitive_objects
 
-from ..types import GraphsBundle
-from ..types.merge_inputs import MergeInputs
+from ..my_types import GraphsBundle
+from ..my_types.merge_inputs import MergeInputs
 
 # --- SHACL constants ----------------------------------------------------
 SH = Namespace("http://www.w3.org/ns/shacl#")
@@ -45,7 +46,17 @@ def run_closure_loop(graphs: GraphsBundle, inputs: MergeInputs) -> None:
 
     passes = 0
 
-    _run_step_3_same_as(graphs, inputs)
+    # Initial domain/range inference (before main loop, matching original)
+    target_domain_range(g, inputs.discovered_focus_nodes, inputs.same_as_dict, inputs.target_classes)
+
+    # Initial focus node merge (before main loop, matching original)
+    # Merge ALL nodes with sameAs relationships, not just discovered_focus_nodes
+    all_sameas_nodes = {s for s, _, _ in g.triples((None, OWL.sameAs, None))} | \
+                       {o for _, _, o in g.triples((None, OWL.sameAs, None))}
+    
+    for node in all_sameas_nodes:
+        while not all_focus_merged(g, node, inputs.discovered_focus_nodes):
+            merge_same_focus(graphs, inputs, node)
 
     while _not_converged(g, inputs):
         passes += 1
@@ -73,12 +84,7 @@ def run_closure_loop(graphs: GraphsBundle, inputs: MergeInputs) -> None:
             stable = 0
         prev_snap = snap
 
-    # Final merge cleanup – catches late-discovered sameAs
-    for focus_node in (inputs.discovered_focus_nodes):
-        while not all_focus_merged(graphs.data_graph, focus_node):
-            merge_same_focus(graphs, inputs, focus_node)
-
-    _add_subclass_closure(g, inputs.discovered_focus_nodes)
+    # Final subproperty closure only (matching original behavior)
     _add_subproperty_closure(g, inputs.discovered_focus_nodes)
 
     log.debug("closure-loop done   | %s", _snapshot(g, inputs))
@@ -97,18 +103,8 @@ def _not_converged(g, inputs):
 def _run_phase_1_class_reasoning(g, inputs: MergeInputs) -> None:
     log.debug("Phase 1  (class)")
 
-    # old_size = len(inputs.discovered_focus_nodes)
-    target_domain_range(g, inputs.discovered_focus_nodes, inputs.same_as_dict, inputs.target_classes)
-    # if len(inputs.discovered_focus_nodes) > old_size:
-    #     inputs.target_nodes.update(inputs.focus_nodes)
-
-    _add_subclass_closure(g, inputs.discovered_focus_nodes)
     merge_target_classes(g, inputs.discovered_focus_nodes, inputs.same_as_dict, inputs.target_classes)
-
-    # old_size = len(inputs.discovered_focus_nodes)
     target_range(g, inputs.discovered_focus_nodes, inputs.same_as_dict, inputs.target_classes)
-    # if len(inputs.focus_nodes) > old_size:
-    #     inputs.target_nodes.update(inputs.focus_nodes)
 
 
 def _run_phase_2_property_reasoning(graphs: GraphsBundle, inputs: MergeInputs) -> None:
@@ -119,11 +115,18 @@ def _run_phase_2_property_reasoning(graphs: GraphsBundle, inputs: MergeInputs) -
 def _run_step_3_same_as(graphs: GraphsBundle, inputs: MergeInputs) -> None:
     log.debug("Step 3   (sameAs merge)")
 
-    for focus_node in (inputs.discovered_focus_nodes):
-        while not all_focus_merged(graphs.data_graph, focus_node):
-            merge_same_focus(graphs, inputs, focus_node)
-
-    _add_subproperty_closure(graphs.data_graph, inputs.discovered_focus_nodes)
+    # Merge owl:sameAs for all nodes, not just discovered_focus_nodes
+    # This handles functional/inverse functional property sameAs relationships
+    g = graphs.data_graph
+    
+    # Find all nodes involved in owl:sameAs relationships (materialize before iterating)
+    all_sameas_nodes = {s for s, _, _ in g.triples((None, OWL.sameAs, None))} | \
+                       {o for _, _, o in g.triples((None, OWL.sameAs, None))}
+    
+    # Merge each node that has sameAs relationships
+    for node in all_sameas_nodes:
+        while not all_focus_merged(g, node, inputs.discovered_focus_nodes):
+            merge_same_focus(graphs, inputs, node)
 
 
 def _snapshot(g, inputs: MergeInputs) -> tuple[int, int, int, int]:
@@ -131,12 +134,28 @@ def _snapshot(g, inputs: MergeInputs) -> tuple[int, int, int, int]:
 
 
 def _expand_discovered_focus_nodes(g, inputs: MergeInputs) -> None:
+    # Find nodes reached via shape paths
     new = {
         obj
-        for p in _shape_path_properties(g)
+        for p in inputs.shape_path_properties
         for obj in g.objects(None, p)
         if obj not in inputs.discovered_focus_nodes
     }
+    
+    # Also add nodes involved in owl:sameAs relationships with existing focus nodes
+    # (these can be created by functional/inverse functional properties)
+    same_as_nodes = set()
+    for focus in inputs.discovered_focus_nodes:
+        # Nodes that are sameAs to existing focus nodes
+        for other in g.objects(focus, OWL.sameAs):
+            if other not in inputs.discovered_focus_nodes:
+                same_as_nodes.add(other)
+        for other in g.subjects(OWL.sameAs, focus):
+            if other not in inputs.discovered_focus_nodes:
+                same_as_nodes.add(other)
+    
+    new = new | same_as_nodes
+    
     if new:
         for n in new:
             inputs.discovered_focus_nodes.add(n)
@@ -145,33 +164,32 @@ def _expand_discovered_focus_nodes(g, inputs: MergeInputs) -> None:
         log.debug("  +%d new focus nodes", len(new))
 
 
-def _shape_path_properties(g):
-    return {
-        p
-        for s, p, _ in g.triples((None, SH_path, None))
-        if (s, SH_node, None) in g or (s, SH_class, None) in g
-    }
+
 
 
 def _add_subproperty_closure(g, discovered_focus_nodes: set) -> None:
     """
     Adds inferred triples via rdfs:subPropertyOf for all predicate-object pairs
-    of all nodes in `found_node_targets`.
+    of all nodes in `discovered_focus_nodes`.
 
     Equivalent to the original vg.add(...) loop in merged_graph().
     """
+    added_count = 0
     for node in discovered_focus_nodes:
         for p, o in g.predicate_objects(node):
-            for super_p in g.transitive_objects(p, RDFS.subPropertyOf):
+            for super_p in safe_transitive_objects(g, p, RDFS.subPropertyOf):
                 if super_p != p:
                     g.add((node, super_p, o))
+                    added_count += 1
+    print(f"[DEBUG] Superproperty closure: {len(discovered_focus_nodes)} focus nodes, added {added_count} triples")
 
 
 def _add_subclass_closure(g, discovered_focus_nodes: set) -> None:
+    """NOT USED - kept for reference only. Original doesn't add subclass closure."""
     for node in discovered_focus_nodes:
         for cls in g.objects(node, RDF.type):
             if (cls, RDF.type, RDF.Property) in g or (cls, RDF.type, OWL.ObjectProperty) in g:
                 continue
-            for super_cls in g.transitive_objects(cls, RDFS.subClassOf):
+            for super_cls in safe_transitive_objects(g, cls, RDFS.subClassOf):
                 if super_cls != cls:
                     g.add((node, RDF.type, super_cls))

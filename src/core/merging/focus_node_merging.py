@@ -23,8 +23,8 @@ from rdflib import Graph, OWL
 from pyshacl.consts import SH_targetNode
 from typing import Set
 
-from src.types import GraphsBundle
-from src.types.merge_inputs import MergeInputs
+from src.my_types import GraphsBundle
+from src.my_types.merge_inputs import MergeInputs
 
 
 def merge_same_focus(
@@ -50,6 +50,9 @@ def merge_same_focus(
     # -- eq-rep and rewire targets
     for o in (g.objects(focus, OWL.sameAs)):
         same_as_dict[focus].add(o)
+        # Add to graph to match original behavior
+        if o != focus:
+            g.add((focus, OWL.sameAs, o))
 
         if o != focus:
             if o in same_as_dict:

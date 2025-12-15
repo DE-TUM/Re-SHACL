@@ -1,6 +1,7 @@
 from rdflib import RDF
 from rdflib.namespace import OWL, RDFS
 from pyshacl.consts import RDFS_subClassOf
+from src.utils.safe_transitive import safe_transitive_objects, safe_transitive_subjects
 
 
 def _infer_type_and_track(
@@ -12,14 +13,12 @@ def _infer_type_and_track(
 
     Parameters:
     - track_if_cls_in_targets: if True, only track if `cls ∈ target_classes`
+    
+    IMPORTANT: Original only adds the DIRECT class, not superclasses.
+    Superclass closure happens separately at the very end.
     """
-    types_to_add = {cls}
-    types_to_add.update(g.objects(cls, OWL.equivalentClass))
-    types_to_add.update(g.subjects(OWL.equivalentClass, cls))
-    types_to_add.update(g.transitive_objects(cls, RDFS_subClassOf))
-
-    for inferred_cls in types_to_add:
-        g.add((node, RDF.type, inferred_cls))
+    # Only add the direct class (matching original behavior)
+    g.add((node, RDF.type, cls))
 
     should_track = (not track_if_cls_in_targets) or (cls in target_classes)
     if should_track and node not in discovered_focus_nodes:
@@ -29,26 +28,31 @@ def _infer_type_and_track(
 
 def _expand_property_type(
     g, prop, cls, discovered_focus_nodes, same_nodes, target_classes, *,
-    on_subject: bool, track_if_cls_in_targets=False
+    on_subject: bool, track_if_cls_in_targets=False, add_equiv_to_subprop=True
 ):
     """
     Expands property-based typing using rdfs:range or rdfs:domain
     through equivalentProperty and subPropertyOf closure.
+    
+    Args:
+        add_equiv_to_subprop: If True, materialize owl:equivalentProperty as rdfs:subPropertyOf.
+                             Original is inconsistent: does this for domain but NOT for range in target_domain_range.
     """
-    # Materialize owl:equivalentProperty as symmetric rdfs:subPropertyOf
-    for ep in g.transitive_objects(prop, OWL.equivalentProperty):
-        g.add((ep, RDFS.subPropertyOf, prop))
-        g.add((prop, RDFS.subPropertyOf, ep))
-        g.remove((prop, OWL.equivalentProperty, ep))
+    # Materialize owl:equivalentProperty as symmetric rdfs:subPropertyOf (if requested)
+    if add_equiv_to_subprop:
+        for ep in safe_transitive_objects(g, prop, OWL.equivalentProperty):
+            g.add((ep, RDFS.subPropertyOf, prop))
+            g.add((prop, RDFS.subPropertyOf, ep))
+            # Note: original does NOT remove the equivalentProperty edge
 
-    for ep in g.transitive_subjects(OWL.equivalentProperty, prop):
-        g.add((ep, RDFS.subPropertyOf, prop))
-        g.add((prop, RDFS.subPropertyOf, ep))
-        g.remove((ep, OWL.equivalentProperty, prop))
+        for ep in safe_transitive_subjects(g, OWL.equivalentProperty, prop):
+            g.add((ep, RDFS.subPropertyOf, prop))
+            g.add((prop, RDFS.subPropertyOf, ep))
+            # Note: original does NOT remove the equivalentProperty edge
 
-    all_props = set(g.transitive_subjects(RDFS.subPropertyOf, prop)).union(
-        g.transitive_objects(prop, OWL.equivalentProperty),
-        g.transitive_subjects(OWL.equivalentProperty, prop)
+    all_props = set(safe_transitive_subjects(g, RDFS.subPropertyOf, prop)).union(
+        safe_transitive_objects(g, prop, OWL.equivalentProperty),
+        safe_transitive_subjects(g, OWL.equivalentProperty, prop)
     )
     all_props.add(prop)
 
@@ -63,45 +67,46 @@ def _expand_property_type(
 
 
 def target_range(g, discovered_focus_nodes, same_nodes, target_classes):
-    changed = True
-    while changed:
-        changed = False
-        start = len(discovered_focus_nodes)
+    """Process rdfs:range constraints for target classes.
+    
+    Original does NOT have a while loop - runs exactly once.
+    Original DOES add equiv→subprop edges for range properties.
+    """
+    for cls in target_classes:
+        for pp in g.subjects(RDFS.range, cls):
+            # add **ep ⊑ pp** for every equivalentProperty (matching original lines 160-161)
+            for ep in safe_transitive_objects(g, pp, OWL.equivalentProperty):
+                g.add((ep, RDFS.subPropertyOf, pp))
+            for ep in safe_transitive_subjects(g, OWL.equivalentProperty, pp):
+                g.add((ep, RDFS.subPropertyOf, pp))
 
-        for cls in target_classes:
-            for pp in g.subjects(RDFS.range, cls):
-                # add **ep ⊑ pp** for every equivalentProperty (legacy line)
-                for ep in g.transitive_objects(pp, OWL.equivalentProperty):
-                    g.add((ep, RDFS.subPropertyOf, pp))
-                for ep in g.transitive_subjects(OWL.equivalentProperty, pp):
-                    g.add((ep, RDFS.subPropertyOf, pp))
-
-                _expand_property_type(
-                    g, pp, cls,
-                    discovered_focus_nodes, same_nodes, target_classes,
-                    on_subject=False,
-                )
-
-        changed = len(discovered_focus_nodes) > start
+            _expand_property_type(
+                g, pp, cls,
+                discovered_focus_nodes, same_nodes, target_classes,
+                on_subject=False,
+                add_equiv_to_subprop=False  # Already done above
+            )
 
 
 def target_domain_range(g, discovered_focus_nodes, same_nodes, target_classes):
-    changed = True
-    while changed:
-        changed = False
-        initial_size = len(discovered_focus_nodes)
-        for cls in target_classes:
-            for prop in g.subjects(RDFS.range, cls):
-                _expand_property_type(
-                    g, prop, cls, discovered_focus_nodes, same_nodes, target_classes,
-                    on_subject=False
-                )
-            for prop in g.subjects(RDFS.domain, cls):
-                _expand_property_type(
-                    g, prop, cls, discovered_focus_nodes, same_nodes, target_classes,
-                    on_subject=True
-                )
-        changed = len(discovered_focus_nodes) > initial_size
+    """Process rdfs:domain and rdfs:range constraints for target classes.
+    
+    Original does NOT have a while loop - runs exactly once.
+    Note: Original does NOT add equiv→subprop for range, only for domain.
+    """
+    for cls in target_classes:
+        # Range (no equiv→subprop conversion in original)
+        for prop in g.subjects(RDFS.range, cls):
+            _expand_property_type(
+                g, prop, cls, discovered_focus_nodes, same_nodes, target_classes,
+                on_subject=False, add_equiv_to_subprop=False
+            )
+        # Domain (with equiv→subprop conversion in original)
+        for prop in g.subjects(RDFS.domain, cls):
+            _expand_property_type(
+                g, prop, cls, discovered_focus_nodes, same_nodes, target_classes,
+                on_subject=True, add_equiv_to_subprop=True
+            )
 
 
 def check_domain_range(g, p, discovered_focus_nodes, same_nodes, target_classes):

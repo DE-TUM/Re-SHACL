@@ -74,4 +74,4 @@ ub:UniversityShape
         sh:path ub:name ;
         sh:maxCount 1 ;
         sh:minCount 1 ; 
-    ] .    
+    ] .

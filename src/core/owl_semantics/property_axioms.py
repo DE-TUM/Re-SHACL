@@ -2,6 +2,7 @@
 
 from rdflib.namespace import OWL, RDF
 from src.errors import FusionRuntimeError
+from src.utils.safe_transitive import safe_transitive_objects
 
 
 def apply_symmetric_property(g, prop):
@@ -15,7 +16,7 @@ def apply_transitive_property(g, prop):
     """Implements OWL TransitiveProperty (prp-trp)"""
     if (prop, RDF.type, OWL.TransitiveProperty) in g:
         for s, o in g.subject_objects(prop):
-            for o2 in g.transitive_objects(o, prop):
+            for o2 in safe_transitive_objects(g, o, prop):
                 g.add((s, prop, o2))
 
 

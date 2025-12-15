@@ -1488,7 +1488,7 @@
 <http://shaclshapes.org/budgetTennisTournamentShapeProperty> a sh:PropertyShape ;
     void:entities "3803"^^xsd:int ;
     sh:NodeKind sh:IRI ;
-    sh:class <%3Chttp://dbpedia.org/datatype/Currency%3E> ;
+    sh:class <http://dbpedia.org/datatype/Currency> ;
     sh:path dbo:budget .
 
 <http://shaclshapes.org/builderShipShapeProperty> a sh:PropertyShape ;
@@ -2199,19 +2199,19 @@
 <http://shaclshapes.org/costShipShapeProperty> a sh:PropertyShape ;
     void:entities "922"^^xsd:int ;
     sh:NodeKind sh:IRI ;
-    sh:class <%3Chttp://dbpedia.org/datatype/Currency%3E> ;
+    sh:class <http://dbpedia.org/datatype/Currency> ;
     sh:path dbo:cost .
 
 <http://shaclshapes.org/costShoppingMallShapeProperty> a sh:PropertyShape ;
     void:entities "5"^^xsd:int ;
     sh:NodeKind sh:IRI ;
-    sh:class <%3Chttp://dbpedia.org/datatype/Currency%3E> ;
+    sh:class <http://dbpedia.org/datatype/Currency> ;
     sh:path dbo:cost .
 
 <http://shaclshapes.org/costStadiumShapeProperty> a sh:PropertyShape ;
     void:entities "28"^^xsd:int ;
     sh:NodeKind sh:IRI ;
-    sh:class <%3Chttp://dbpedia.org/datatype/Currency%3E> ;
+    sh:class <http://dbpedia.org/datatype/Currency> ;
     sh:path dbo:cost .
 
 <http://shaclshapes.org/countryCongressmanShapeProperty> a sh:PropertyShape ;
@@ -3278,13 +3278,13 @@
 <http://shaclshapes.org/grossSnookerChampShapeProperty> a sh:PropertyShape ;
     void:entities "15"^^xsd:int ;
     sh:NodeKind sh:IRI ;
-    sh:class <%3Chttp://dbpedia.org/datatype/Currency%3E> ;
+    sh:class <http://dbpedia.org/datatype/Currency> ;
     sh:path dbo:gross .
 
 <http://shaclshapes.org/grossSnookerPlayerShapeProperty> a sh:PropertyShape ;
     void:entities "310"^^xsd:int ;
     sh:NodeKind sh:IRI ;
-    sh:class <%3Chttp://dbpedia.org/datatype/Currency%3E> ;
+    sh:class <http://dbpedia.org/datatype/Currency> ;
     sh:path dbo:gross .
 
 <http://shaclshapes.org/groundCricketTeamShapeProperty> a sh:PropertyShape ;

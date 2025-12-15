@@ -15,21 +15,40 @@ def merge_target_classes(g,
     delta_nodes        = set()           # instances newly seen
     delta_classes      = set()           # classes touched
 
+    MAX_ITERATIONS = 1000
     for cls in (target_classes):
-        while _has_equiv_links(g, cls):
+        iterations = 0
+        while _has_equiv_links(g, cls) and iterations < MAX_ITERATIONS:
+            iterations += 1
             # ---- ∀ in-edges  x ≡ cls  ----------------------------------
-            for x in (g.subjects(OWL.equivalentClass, cls)):
-                _rewrite_edge(g, x, cls, delta_nodes, same_nodes)
-                delta_classes.add(x)
-            for x in (g.subjects(OWL.sameAs, cls)):
-                _rewrite_edge(g, x, cls, delta_nodes, same_nodes)
+            # Collect first to avoid modifying while iterating
+            equiv_subjects = list(g.subjects(OWL.equivalentClass, cls))
+            same_subjects = list(g.subjects(OWL.sameAs, cls))
+            
+            for x in equiv_subjects:
+                if (x, OWL.equivalentClass, cls) in g:  # Check still exists
+                    _rewrite_edge(g, x, cls, delta_nodes, same_nodes)
+                    delta_classes.add(x)
+                    
+            for x in same_subjects:
+                if (x, OWL.sameAs, cls) in g:  # Check still exists
+                    _rewrite_edge(g, x, cls, delta_nodes, same_nodes)
 
             # ---- ∀ out-edges cls ≡ y  ----------------------------------
-            for y in (g.objects(cls, OWL.equivalentClass)):
-                _rewrite_edge(g, cls, y, delta_nodes, same_nodes)
-                delta_classes.add(y)
-            for y in (g.objects(cls, OWL.sameAs)):
-                _rewrite_edge(g, cls, y, delta_nodes, same_nodes)
+            equiv_objects = list(g.objects(cls, OWL.equivalentClass))
+            same_objects = list(g.objects(cls, OWL.sameAs))
+            
+            for y in equiv_objects:
+                if (cls, OWL.equivalentClass, y) in g:  # Check still exists
+                    _rewrite_edge(g, cls, y, delta_nodes, same_nodes)
+                    delta_classes.add(y)
+                    
+            for y in same_objects:
+                if (cls, OWL.sameAs, y) in g:  # Check still exists
+                    _rewrite_edge(g, cls, y, delta_nodes, same_nodes)
+        
+        if iterations >= MAX_ITERATIONS:
+            print(f"WARNING: merge_target_classes hit MAX_ITERATIONS for class {cls}")
 
     # -------- propagate rdf:type up the DAG once for all new instances ---
     _propagate_types_incremental(g, delta_nodes, super_map)
@@ -86,14 +105,22 @@ def _build_superclass_map(g):
     for s, _, o in g.triples((None, RDFS.subClassOf, None)):
         direct.setdefault(s, set()).add(o)
     supers = {c: set(p) for c, p in direct.items()}
+    
+    MAX_ITERATIONS = 1000
+    iterations = 0
     changed = True
-    while changed:
+    while changed and iterations < MAX_ITERATIONS:
         changed = False
-        for c in (supers):
+        iterations += 1
+        for c in list(supers.keys()):  # Use list() to avoid modification during iteration
             inherited = {p for p in supers[c] for p in supers.get(p, ())}
             if inherited - supers[c]:
                 supers[c].update(inherited)
                 changed = True
+    
+    if iterations >= MAX_ITERATIONS:
+        print(f"WARNING: _build_superclass_map hit MAX_ITERATIONS")
+        
     return {c: frozenset(p) for c, p in supers.items()}
 
 

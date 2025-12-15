@@ -46,11 +46,25 @@ def all_subProperties_merged(g, p):
     return not any(g.subjects(RDFS.subPropertyOf, p))
 
 
-def all_focus_merged(g, focus):
-    return (
-        not any(g.objects(focus, OWL.sameAs))
-        and not any(g.subjects(OWL.sameAs, focus))
-    )
+def all_focus_merged(g, focus, discovered_focus_nodes):
+    """Check if focus node has no more sameAs edges to merge.
+    
+    Returns False if:
+    1. focus has outgoing owl:sameAs edges, OR
+    2. focus has incoming owl:sameAs edges from nodes NOT in discovered_focus_nodes
+    
+    This matches original logic where external nodes pointing to focus prevent merge completion.
+    """
+    # Check outgoing sameAs
+    if any(g.objects(focus, OWL.sameAs)):
+        return False
+    
+    # Check incoming sameAs - only from nodes in discovered_focus_nodes
+    for subj in g.subjects(OWL.sameAs, focus):
+        if subj not in discovered_focus_nodes:
+            return False
+    
+    return True
 
 
 
@@ -97,11 +111,12 @@ def print_not_merged_status(g, inputs):
         if has_merge_candidates(g, path, merge_preds_path)
     ]
 
-    print(f"⏳ Still unmerged:")
-    print(f"  • {len(unmerged_classes)} class targets have owl:sameAs / owl:equivalentClass")
-    print(f"  • {len(unmerged_paths)} property paths have owl:sameAs / owl:equivalentProperty / subPropertyOf")
-
-    if unmerged_classes:
-        print(f"    → Sample classes: {unmerged_classes[:5]}")
-    if unmerged_paths:
-        print(f"    → Sample paths: {unmerged_paths[:5]}")
+    # Suppress detailed output to avoid Unicode encoding issues on Windows
+    # print(f"Still unmerged:")
+    # print(f"  - {len(unmerged_classes)} class targets have owl:sameAs / owl:equivalentClass")
+    # print(f"  - {len(unmerged_paths)} property paths have owl:sameAs / owl:equivalentProperty / subPropertyOf")
+    
+    # if unmerged_classes:
+    #     print(f"    - Sample classes: {unmerged_classes[:5]}")
+    # if unmerged_paths:
+    #     print(f"    - Sample paths: {unmerged_paths[:5]}")
