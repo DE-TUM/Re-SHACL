@@ -25,7 +25,10 @@ def merge_same_property(graphs, inputs):
     shapes = graphs.shapes_graph.shapes
     prop_shapes = {ps for sh in shapes for ps in sh.property_shapes()}
 
-    for focus in (inputs.property_paths):       # legacy iterated over a copy
+    # Sort property_paths to ensure deterministic processing order
+    # This matches the original's iteration order over found focus properties
+    for focus in sorted(inputs.property_paths, key=str):       # legacy iterated over a copy
+        
         _collapse_subproperty_chain(g, focus)
         _collapse_equivalent_properties(g, focus, prop_shapes, sg, set(inputs.property_paths))
         _apply_semantics(g, focus, inputs)

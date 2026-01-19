@@ -51,12 +51,8 @@ def run_closure_loop(graphs: GraphsBundle, inputs: MergeInputs) -> None:
 
     # Initial focus node merge (before main loop, matching original)
     # Merge ALL nodes with sameAs relationships, not just discovered_focus_nodes
-    all_sameas_nodes = {s for s, _, _ in g.triples((None, OWL.sameAs, None))} | \
-                       {o for _, _, o in g.triples((None, OWL.sameAs, None))}
-    
-    for node in all_sameas_nodes:
-        while not all_focus_merged(g, node, inputs.discovered_focus_nodes):
-            merge_same_focus(graphs, inputs, node)
+    # We need to merge them completely, ignoring discovered_focus_nodes restriction
+    _merge_all_initial_same_as(graphs, inputs)
 
     while _not_converged(g, inputs):
         passes += 1
@@ -115,22 +111,104 @@ def _run_phase_2_property_reasoning(graphs: GraphsBundle, inputs: MergeInputs) -
 def _run_step_3_same_as(graphs: GraphsBundle, inputs: MergeInputs) -> None:
     log.debug("Step 3   (sameAs merge)")
 
-    # Merge owl:sameAs for all nodes, not just discovered_focus_nodes
-    # This handles functional/inverse functional property sameAs relationships
+    # Merge owl:sameAs for individuals, NOT properties
+    # Properties are handled separately by property merging
     g = graphs.data_graph
     
     # Find all nodes involved in owl:sameAs relationships (materialize before iterating)
     all_sameas_nodes = {s for s, _, _ in g.triples((None, OWL.sameAs, None))} | \
                        {o for _, _, o in g.triples((None, OWL.sameAs, None))}
     
-    # Merge each node that has sameAs relationships
+    # Filter out properties - same logic as in _merge_all_initial_same_as
+    property_nodes = set()
+    for s, p, o in g:
+        if p != OWL.sameAs:
+            property_nodes.add(p)
+    
+    # Also check for explicit property type declarations
     for node in all_sameas_nodes:
+        if (node, RDF.type, OWL.ObjectProperty) in g or \
+           (node, RDF.type, OWL.DatatypeProperty) in g or \
+           (node, RDF.type, OWL.FunctionalProperty) in g or \
+           (node, RDF.type, OWL.InverseFunctionalProperty) in g or \
+           (node, RDF.type, RDF.Property) in g:
+            property_nodes.add(node)
+    
+    individual_sameas_nodes = all_sameas_nodes - property_nodes
+    
+    # Merge each individual that has sameAs relationships
+    for node in individual_sameas_nodes:
         while not all_focus_merged(g, node, inputs.discovered_focus_nodes):
             merge_same_focus(graphs, inputs, node)
 
 
 def _snapshot(g, inputs: MergeInputs) -> tuple[int, int, int, int]:
     return len(g), len(inputs.target_classes), len(inputs.property_paths), len(inputs.discovered_focus_nodes)
+
+
+def _merge_all_initial_same_as(graphs: GraphsBundle, inputs: MergeInputs) -> None:
+    """
+    Merge all initial owl:sameAs relationships in the data graph.
+    
+    This function processes explicitly declared owl:sameAs triples and merges
+    them completely, starting with nodes in discovered_focus_nodes first (to match original order).
+    This matches the original behavior where focus nodes are processed before other nodes.
+    
+    IMPORTANT: Only processes individuals (focus nodes), not properties.
+    Properties are handled separately by property merging.
+    """
+    g = graphs.data_graph
+    
+    # Find all nodes involved in owl:sameAs relationships
+    all_sameas_nodes = {s for s, _, _ in g.triples((None, OWL.sameAs, None))} | \
+                       {o for _, _, o in g.triples((None, OWL.sameAs, None))}
+    
+    # Filter out properties - only process individuals
+    # Properties are nodes that appear as predicates in triples (except owl:sameAs itself)
+    property_nodes = set()
+    for s, p, o in g:
+        if p != OWL.sameAs and p not in property_nodes:
+            # p is used as a predicate, so it's a property
+            property_nodes.add(p)
+    
+    # Also check for explicit property type declarations
+    from rdflib import RDF
+    for node in all_sameas_nodes:
+        if (node, RDF.type, OWL.ObjectProperty) in g or \
+           (node, RDF.type, OWL.DatatypeProperty) in g or \
+           (node, RDF.type, OWL.FunctionalProperty) in g or \
+           (node, RDF.type, OWL.InverseFunctionalProperty) in g or \
+           (node, RDF.type, RDF.Property) in g:
+            property_nodes.add(node)
+    
+    # IMPORTANT: If a node is sameAs to a property, it's also a property
+    # This handles cases like schema:Name which isn't used as predicate but is sameAs to schema:name
+    property_closure = set(property_nodes)
+    for node in all_sameas_nodes:
+        # Check if this node is connected to any property via sameAs
+        connected_nodes = set(g.objects(node, OWL.sameAs)) | set(g.subjects(OWL.sameAs, node))
+        if connected_nodes & property_nodes:
+            property_closure.add(node)
+    
+    # Remove properties from the set of nodes to process
+    individual_sameas_nodes = all_sameas_nodes - property_closure
+    
+    # Process focus nodes FIRST (to match original behavior)
+    # Then process remaining nodes
+    focus_nodes_to_process = [n for n in inputs.discovered_focus_nodes if n in individual_sameas_nodes]
+    other_nodes_to_process = [n for n in individual_sameas_nodes if n not in inputs.discovered_focus_nodes]
+    
+    # Process in order: focus nodes first, then others
+    for node in focus_nodes_to_process + other_nodes_to_process:
+        # Keep merging while this node has unmerged sameAs relationships
+        # Match original: merge while has outgoing edges OR incoming edges from non-focus nodes
+        while not all_focus_merged(g, node, inputs.discovered_focus_nodes):
+            merge_same_focus(graphs, inputs, node)
+        
+        # Add this node to discovered_focus_nodes if not already there
+        if node not in inputs.discovered_focus_nodes:
+            inputs.discovered_focus_nodes.add(node)
+            inputs.same_as_dict.setdefault(node, set())
 
 
 def _expand_discovered_focus_nodes(g, inputs: MergeInputs) -> None:
