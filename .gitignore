@@ -1,0 +1,5 @@
+# Ignore source directory
+source/
+
+# macOS
+.DS_Store
