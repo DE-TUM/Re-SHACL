@@ -468,7 +468,7 @@ def merge_target_classes(g, found_node_targets, same_nodes, target_classes):  #T
                     g.add((s, RDF.type, c))
                 for ss in g.subjects(RDF.type, c):
                     g.add((ss, RDF.type, c2))
-                g.remove((c, OWL.equivalentClass, c2))
+                g.remove((c, OWL.sameAs, c2))
                 g.add((c2, RDFS.subClassOf, c))
                 g.add((c, RDFS.subClassOf, c2))
 
