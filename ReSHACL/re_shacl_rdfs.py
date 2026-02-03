@@ -27,6 +27,13 @@ RDFS_PFX = 'http://www.w3.org/2000/01/rdf-schema#'
 RDFS = Namespace(RDFS_PFX)
 RDFS_subPropertyOf = RDFS.subPropertyOf
 
+def _deterministic_term_key(term):
+    return (term.__class__.__name__, str(term))
+
+def deterministic_name(names):
+    ordered = sorted(names, key=_deterministic_term_key)
+    return ordered[0] if ordered else None
+
 
 if TYPE_CHECKING:
     from pyshacl.shapes_graph import ShapesGraph
@@ -457,7 +464,7 @@ def merge_target_classes(g, found_node_targets, same_nodes, target_classes):
                     g.add((s, RDF.type, c))
                 for ss in g.subjects(RDF.type, c):
                     g.add((ss, RDF.type, c2))
-                g.remove((c, OWL.equivalentClass, c2))
+                g.remove((c, OWL.sameAs, c2))
                 g.add((c2, RDFS.subClassOf, c))
                 g.add((c, RDFS.subClassOf, c2))
 
@@ -678,7 +685,10 @@ def merged_graph(
 
     # target_domain_range(vg, found_node_targets, same_nodes, target_classes)
     
-    for focus_node in found_node_targets:    
+    pending_focus_nodes = set(found_node_targets)
+    while pending_focus_nodes:
+        focus_node = deterministic_name(pending_focus_nodes)
+        pending_focus_nodes.remove(focus_node)
   
         while not all_focus_merged(vg, focus_node, found_node_targets):
        
@@ -694,7 +704,10 @@ def merged_graph(
         merge_same_property(vg, path_value, found_node_targets, same_nodes, target_classes, shapes, target_property, shape_g)
         
         # merge same nodes
-        for focus_node in found_node_targets:    
+        pending_focus_nodes = set(found_node_targets)
+        while pending_focus_nodes:
+            focus_node = deterministic_name(pending_focus_nodes)
+            pending_focus_nodes.remove(focus_node)
       
             while not all_focus_merged(vg, focus_node, found_node_targets):
           
