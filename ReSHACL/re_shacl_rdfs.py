@@ -475,8 +475,21 @@ def merge_target_classes(g, found_node_targets, same_nodes, target_classes):
             same_nodes.update({new_node: same_set})
         
     found_node_targets.update(eq_targetNodes)
-    target_classes.update(eq_targetClass)   
-    
+    target_classes.update(get_subclasses(g, eq_targetClass))
+    target_classes.update(eq_targetClass)
+
+
+def get_subclasses(vg, target_classes):
+    found_subclasses = set()
+    for tc in target_classes:
+        subc = vg.transitive_subjects(RDFS_subClassOf, tc)
+        for subclass in subc:
+            if subclass == tc:
+                continue
+            found_subclasses.add(subclass)
+
+    return found_subclasses
+  
             
         
 def merge_same_property(g, properties, found_node_targets, same_nodes, target_classes, shapes, target_property, shacl_graph):
